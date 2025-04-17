@@ -59,7 +59,7 @@ class HEALpacaClient(LLMClient):
             self,
             chat_model: str = "llama3.1:latest",  #"HEALpaca-2.0",
             embedding_model: str = "nomic-embed-text",
-            api_url: str = "https://ollama.apps.renci.org/api/generate",
+            api_url: str = "https://healpaca.apps.renci.org/api/generate",
             #"https://healpaca.apps.renci.org/api/generate",
             embedding_url: str = "https://healpaca.apps.renci.org/api/embeddings",
             chat_temperature: float = 0.5,

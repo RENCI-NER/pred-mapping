@@ -2,12 +2,14 @@ import re
 import json
 import ast
 import time
-import logging
 from typing import Union
+from src.llm_client import HEALpacaClient
+import logging
+logger = logging.getLogger(__name__)
+logging.getLogger("linkml_runtime").setLevel(logging.WARNING)
+logging.getLogger("docarray").setLevel(logging.ERROR)
 from bmt import Toolkit
 from src.predicate_database import PredicateDatabase
-from src.llm_client import HEALpacaClient
-logger = logging.getLogger(__name__)
 
 
 def get_prompt(in_json):
@@ -73,33 +75,6 @@ def parse_new_llm_response(llm_response: Union[str, list[dict]]) -> list[dict]:
         raise TypeError("Input must be a path (str) or a list of dicts")
 
     return parsed
-
-
-def lookup_all_relationships(parsed_data: list[dict], db: PredicateDatabase, output_file: str = None,
-                              num_results: int = 10) -> list[dict]:
-    print("Looking up all relationships")
-    have_embeddings = sum(["relationship_embedding" in list(edge.keys()) for edge in parsed_data])
-    print(f"Embeddings found: {have_embeddings}. Sending {len(parsed_data) - have_embeddings} relationships to model.")
-
-    for edge in parsed_data:
-        try:
-            if "relationship_embedding" not in list(edge.keys()):
-                edge["relationship_embedding"] = db.client.get_embedding(edge["relationship"])
-
-            edge["nearest_neighbors"] = db.search(
-                text=edge["relationship"],
-                embedding=edge["relationship_embedding"],
-                num_results=num_results
-            )
-        except KeyError as e:
-            print(e)
-            print(json.dumps(edge, indent=2))
-
-    if output_file is not None:
-        with open(output_file, "w") as out_file:
-            out_file.writelines(json.dumps(edge) + "\n" for edge in parsed_data)
-
-    return parsed_data
 
 
 def relationship_queries_to_batch(query_results: list[dict], descriptions) -> list[dict]:
