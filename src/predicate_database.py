@@ -14,13 +14,13 @@ class PredicateText(BaseDoc):
 
 
 class PredicateDatabase:
-    def __init__(self, client, vdb = False):
+    def __init__(self, client, is_vdb = False):
         self.all_pred_emb = None
         self.all_pred_texts = None
         self.all_pred = None
         self.db = None
         self.client = client
-        self.vdb = vdb
+        self.is_vdb = is_vdb
 
     def load_db_from_json(self, embeddings_file):
         print("Loading json")
@@ -29,7 +29,7 @@ class PredicateDatabase:
         self.populate_db(embeddings)
 
     def populate_db(self, embeddings):
-        if self.vdb:
+        if self.is_vdb:
             doc_list = []
             for entry in embeddings:
                 if len(entry["text"]) != 0:
@@ -52,10 +52,10 @@ class PredicateDatabase:
     def search(self, text, embedding=None, num_results=10):
         if embedding is None:
             embedding = self.client.get_embedding(text)
-        if len(embedding) == 0:
+        if not embedding:
             return None
 
-        if self.vdb:
+        if self.is_vdb:
             query = PredicateText(text=text, embedding=embedding)
             results = self.db.search(inputs=DocList[PredicateText]([query]), limit=num_results)
 

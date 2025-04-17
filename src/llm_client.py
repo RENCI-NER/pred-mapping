@@ -57,10 +57,10 @@ class LLMClient:
 class HEALpacaClient(LLMClient):
     def __init__(
             self,
-            chat_model: str = "llama3.1:latest",  #"HEALpaca-2.0",
+            chat_model: str = "HEALpaca-2.0", #"llama3.1:latest"
             embedding_model: str = "nomic-embed-text",
             api_url: str = "https://healpaca.apps.renci.org/api/generate",
-            #"https://healpaca.apps.renci.org/api/generate",
+            #"https://ollama.apps.renci.org/api/generate",
             embedding_url: str = "https://healpaca.apps.renci.org/api/embeddings",
             chat_temperature: float = 0.5,
     ):
@@ -68,8 +68,20 @@ class HEALpacaClient(LLMClient):
         self.api_url = api_url
         self.embedding_url = embedding_url
 
-    def get_embedding(self, text: str) -> list:
-        return _cached_embedding_request(text)
+    # def get_embedding(self, text: str) -> list:
+    #     return _cached_embedding_request(text)
+    def get_embedding( self, text: str ) -> list:
+        """ Get embedding for a single text string """
+        request = self.embedding_request(text)
+        headers = {"Content-Type": "application/json"}
+
+        response = requests.post(self.embedding_url, json=request, headers=headers)
+
+        if response.status_code == 200:
+            return response.json()["embedding"]
+        else:
+            print(Exception(f"Error Code: {response.status_code}"))
+            return None
 
     def get_chat_completion(self, prompt: str):
         """ Get single chat response """

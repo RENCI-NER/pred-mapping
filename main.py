@@ -57,7 +57,7 @@ def run_query(triple_input: list, description_file: str, embedding_file: str):
     with open(embedding_file, "r") as f:
         predicate_embedding = json.load(f)
     logging.info(f"Initializing the DB with {len(predicate_embedding)} predicate embeddings.... ")
-    db = blp.PredicateDatabase(client=llm, vdb=False)
+    db = blp.PredicateDatabase(client=llm, is_vdb=True)
     db.populate_db(predicate_embedding)
 
     data = blp.parse_new_llm_response(triple_input)
@@ -68,6 +68,6 @@ def run_query(triple_input: list, description_file: str, embedding_file: str):
     with open(description_file, "r") as f:
         predicate_descriptions = json.load(f)
     relationships = blp.relationship_queries_to_batch(relationships, predicate_descriptions)
-    output_triples = llm.check_relationship(relationships)
+    output_triples = llm.check_relationship(relationships, db.is_vdb)
     return output_triples
 

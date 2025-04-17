@@ -39,7 +39,7 @@ class PredicateClient(HEALpacaClient):
     def __init__( self, **kwargs ):
         super().__init__(**kwargs)
 
-    def check_relationship(self, relationships_json: list[dict]) -> list:
+    def check_relationship(self, relationships_json: list[dict], is_vdb = False) -> list:
         """ Send options for a single relationship to OpenAI LLM """
         """ Send options for a single relationship to LLM """
         model = self.chat_model
@@ -49,8 +49,9 @@ class PredicateClient(HEALpacaClient):
             ai_response = self.get_chat_completion(prompt)
             choices = list(relationship_json.get("predicate_choices").keys())
             top_choice = extract_mapped_predicate(ai_response, choices)
+            print(top_choice)
             relationship_json["top_choice"] = {
-                "model": model if top_choice else 'nearest_neighbors',
+                "model": model if top_choice else ("nearest_neighbors" if is_vdb else "NP_similarities"),
                 "predicate": top_choice or f'biolink:{choices[0].replace(" ", "_")}',
                 "qualifier": "",
             }
