@@ -1,0 +1,74 @@
+[
+  {
+    "subject": "Hypertension",
+    "object": "Brain edema",
+    "relationship": "improves",
+    "abstract": "The effect of induced hypertension instituted after a 2-h delay following middle cerebral artery occlusion (MCAO) on brain edema formation and histochemical injury was studied. Under isoflurane anesthesia, the MCA of 14 spontaneously hypertensive rats was occluded. In the control group (n = 7), the mean arterial pressure (MAP) was not manipulated. In the hypertensive group (n = 7), the MAP was elevated by 25-30 mm Hg beginning 2 h after MCAO. Four hours after MCAO, the rats were killed and the brains harvested. The brains were sectioned along coronal planes spanning the distribution of ischemia produced by MCAO. Specific gravity (SG) was determined in the subcortex and in two sites in the cortex (core and periphery of the ischemic territory). The extent of neuronal injury was determined by 2,3,5-triphenyltetrazolium staining. In the ischemic core, there was no difference in SG in the subcortex and cortex in the two groups. In the periphery of the ischemic territory, SG in the cortex was greater (less edema accumulation) in the hypertensive group (1.041 +/- 0.001 vs 1.039 +/- 0.001, P less than 0.05). The area of histochemical injury (as a percent of the cross-sectional area of the hemisphere) was less in the hypertensive group (33 +/- 3% vs 21 +/- 2%, P less than 0.05). The data indicate that phenylephrine-induced hypertension instituted 2 h after MCAO does not aggravate edema in the ischemic core, that it improves edema in the periphery of the ischemic territory, and that it reduces the area of histochemical neuronal dysfunction."
+  },
+  {
+    "subject": "Hypertension",
+    "object": "Neuronal dysfunction",
+    "relationship": "reduces",
+    "abstract": "The effect of induced hypertension instituted after a 2-h delay following middle cerebral artery occlusion (MCAO) on brain edema formation and histochemical injury was studied. Under isoflurane anesthesia, the MCA of 14 spontaneously hypertensive rats was occluded. In the control group (n = 7), the mean arterial pressure (MAP) was not manipulated. In the hypertensive group (n = 7), the MAP was elevated by 25-30 mm Hg beginning 2 h after MCAO. Four hours after MCAO, the rats were killed and the brains harvested. The brains were sectioned along coronal planes spanning the distribution of ischemia produced by MCAO. Specific gravity (SG) was determined in the subcortex and in two sites in the cortex (core and periphery of the ischemic territory). The extent of neuronal injury was determined by 2,3,5-triphenyltetrazolium staining. In the ischemic core, there was no difference in SG in the subcortex and cortex in the two groups. In the periphery of the ischemic territory, SG in the cortex was greater (less edema accumulation) in the hypertensive group (1.041 +/- 0.001 vs 1.039 +/- 0.001, P less than 0.05). The area of histochemical injury (as a percent of the cross-sectional area of the hemisphere) was less in the hypertensive group (33 +/- 3% vs 21 +/- 2%, P less than 0.05). The data indicate that phenylephrine-induced hypertension instituted 2 h after MCAO does not aggravate edema in the ischemic core, that it improves edema in the periphery of the ischemic territory, and that it reduces the area of histochemical neuronal dysfunction."
+  },
+  {
+    "subject": "Hypertension",
+    "object": "Brain edema",
+    "relationship": "does not worsen",
+    "abstract": "The effect of induced hypertension instituted after a 2-h delay following middle cerebral artery occlusion (MCAO) on brain edema formation and histochemical injury was studied. Under isoflurane anesthesia, the MCA of 14 spontaneously hypertensive rats was occluded. In the control group (n = 7), the mean arterial pressure (MAP) was not manipulated. In the hypertensive group (n = 7), the MAP was elevated by 25-30 mm Hg beginning 2 h after MCAO. Four hours after MCAO, the rats were killed and the brains harvested. The brains were sectioned along coronal planes spanning the distribution of ischemia produced by MCAO. Specific gravity (SG) was determined in the subcortex and in two sites in the cortex (core and periphery of the ischemic territory). The extent of neuronal injury was determined by 2,3,5-triphenyltetrazolium staining. In the ischemic core, there was no difference in SG in the subcortex and cortex in the two groups. In the periphery of the ischemic territory, SG in the cortex was greater (less edema accumulation) in the hypertensive group (1.041 +/- 0.001 vs 1.039 +/- 0.001, P less than 0.05). The area of histochemical injury (as a percent of the cross-sectional area of the hemisphere) was less in the hypertensive group (33 +/- 3% vs 21 +/- 2%, P less than 0.05). The data indicate that phenylephrine-induced hypertension instituted 2 h after MCAO does not aggravate edema in the ischemic core, that it improves edema in the periphery of the ischemic territory, and that it reduces the area of histochemical neuronal dysfunction."
+  },
+  {
+    "subject": "Becker muscular dystrophy (BMD)",
+    "object": "X chromosome",
+    "relationship": "located on",
+    "abstract": "A linkage study in 30 Becker muscular dystrophy (BMD) kindreds using three cloned DNA sequences from the X chromosome which demonstrate restriction fragment length polymorphisms (RFLPs), suggests that the BMD gene is located on the short arm of the X chromosome, in the p21 region. The genes for Becker and Duchenne dystrophies must therefore be closely linked, if not allelic, and any future DNA probes found to be of practical use in one disorder should be equally applicable to the other. The linkage analysis also provides data on the frequency of recombination along the short arm of the X chromosome, and across the centromeric region."
+  },
+  {
+    "subject": "Becker muscular dystrophy (BMD) gene",
+    "object": "Duchenne dystrophy gene",
+    "relationship": "must be closely linked with",
+    "abstract": "A linkage study in 30 Becker muscular dystrophy (BMD) kindreds using three cloned DNA sequences from the X chromosome which demonstrate restriction fragment length polymorphisms (RFLPs), suggests that the BMD gene is located on the short arm of the X chromosome, in the p21 region. The genes for Becker and Duchenne dystrophies must therefore be closely linked, if not allelic, and any future DNA probes found to be of practical use in one disorder should be equally applicable to the other. The linkage analysis also provides data on the frequency of recombination along the short arm of the X chromosome, and across the centromeric region."
+  },
+  {
+    "subject": "Linkage analysis",
+    "object": "frequency of recombination",
+    "relationship": "provides data on",
+    "abstract": "A linkage study in 30 Becker muscular dystrophy (BMD) kindreds using three cloned DNA sequences from the X chromosome which demonstrate restriction fragment length polymorphisms (RFLPs), suggests that the BMD gene is located on the short arm of the X chromosome, in the p21 region. The genes for Becker and Duchenne dystrophies must therefore be closely linked, if not allelic, and any future DNA probes found to be of practical use in one disorder should be equally applicable to the other. The linkage analysis also provides data on the frequency of recombination along the short arm of the X chromosome, and across the centromeric region."
+  },
+  {
+    "subject": "Haloperidol",
+    "object": "Prolactin",
+    "relationship": "increases levels of",
+    "abstract": "The effects of a 6-hour infusion with haloperidol on serum prolactin and luteinizing hormone (LH) levels was studied in a group of male subjects. Five hours after starting the infusions, a study of the pituitary responses to LH-releasing hormone (LH-RH) was carried out. Control patients received infusions of 0.9% NaCl solution. During the course of haloperidol infusions, significant hyperprolactinemia was found, together with an abolished pituitary response to LH-RH, as compared with responses of control subjects."
+  },
+  {
+    "subject": "Haloperidol",
+    "object": "Pituitary",
+    "relationship": "abolishes response to LH-releasing hormone",
+    "abstract": "The effects of a 6-hour infusion with haloperidol on serum prolactin and luteinizing hormone (LH) levels was studied in a group of male subjects. Five hours after starting the infusions, a study of the pituitary responses to LH-releasing hormone (LH-RH) was carried out. Control patients received infusions of 0.9% NaCl solution. During the course of haloperidol infusions, significant hyperprolactinemia was found, together with an abolished pituitary response to LH-RH, as compared with responses of control subjects."
+  },
+  {
+    "subject": "Haloperidol",
+    "object": "Hyperprolactinemia",
+    "relationship": "causes",
+    "abstract": "The effects of a 6-hour infusion with haloperidol on serum prolactin and luteinizing hormone (LH) levels was studied in a group of male subjects. Five hours after starting the infusions, a study of the pituitary responses to LH-releasing hormone (LH-RH) was carried out. Control patients received infusions of 0.9% NaCl solution. During the course of haloperidol infusions, significant hyperprolactinemia was found, together with an abolished pituitary response to LH-RH, as compared with responses of control subjects."
+  },
+  {
+    "subject": "Adrenoleukodystrophy (ALD)",
+    "object": "mutation",
+    "relationship": "generated",
+    "abstract": "Fragments of the adrenoleukodystrophy (ALD) cDNA from a patient with adolescent ALD were amplified by polymerase chain reaction and subcloned. Bidirectional sequencing of the entire coding ALD gene disclosed a cytosine to guanine transversion at nucleotide 1451 in exon five, resulting in substitution of proline 484 by arginine. Five of nine siblings of the patient, comprising two cerebral ALD, one adrenomyeloneuropathy, one Addison only as well as the symptomatic mother (all accumulating very long chain fatty acids) carried this mutation, which was not found in the unaffected persons, in five unrelated ALD patients, and in twenty controls. We propose that this missense mutation generated the disease per se as well as the metabolic defect; the different phenotypes, however, must have originated by means of additional pathogenetic factors."
+  },
+  {
+    "subject": "mutation",
+    "object": "ALD gene",
+    "relationship": "found in",
+    "abstract": "Fragments of the adrenoleukodystrophy (ALD) cDNA from a patient with adolescent ALD were amplified by polymerase chain reaction and subcloned. Bidirectional sequencing of the entire coding ALD gene disclosed a cytosine to guanine transversion at nucleotide 1451 in exon five, resulting in substitution of proline 484 by arginine. Five of nine siblings of the patient, comprising two cerebral ALD, one adrenomyeloneuropathy, one Addison only as well as the symptomatic mother (all accumulating very long chain fatty acids) carried this mutation, which was not found in the unaffected persons, in five unrelated ALD patients, and in twenty controls. We propose that this missense mutation generated the disease per se as well as the metabolic defect; the different phenotypes, however, must have originated by means of additional pathogenetic factors."
+  },
+  {
+    "subject": "Very long chain fatty acids",
+    "object": "ALD",
+    "relationship": "accumulated by",
+    "abstract": "Fragments of the adrenoleukodystrophy (ALD) cDNA from a patient with adolescent ALD were amplified by polymerase chain reaction and subcloned. Bidirectional sequencing of the entire coding ALD gene disclosed a cytosine to guanine transversion at nucleotide 1451 in exon five, resulting in substitution of proline 484 by arginine. Five of nine siblings of the patient, comprising two cerebral ALD, one adrenomyeloneuropathy, one Addison only as well as the symptomatic mother (all accumulating very long chain fatty acids) carried this mutation, which was not found in the unaffected persons, in five unrelated ALD patients, and in twenty controls. We propose that this missense mutation generated the disease per se as well as the metabolic defect; the different phenotypes, however, must have originated by means of additional pathogenetic factors."
+  }
+]
