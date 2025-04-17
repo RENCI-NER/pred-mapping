@@ -57,7 +57,7 @@ def run_query(triple_input: list, description_file: str, embedding_file: str):
     with open(embedding_file, "r") as f:
         predicate_embedding = json.load(f)
     logging.info(f"Initializing the DB with {len(predicate_embedding)} predicate embeddings.... ")
-    db = blp.PredicateDatabase(client=llm, vdb=True)
+    db = blp.PredicateDatabase(client=llm, vdb=False)
     db.populate_db(predicate_embedding)
 
     data = blp.parse_new_llm_response(triple_input)
