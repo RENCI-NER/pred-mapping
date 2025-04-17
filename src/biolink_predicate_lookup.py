@@ -5,8 +5,8 @@ import time
 import logging
 from typing import Union
 from bmt import Toolkit
-from predicate_database import PredicateDatabase
-from llm_client import HEALpacaClient
+from src.predicate_database import PredicateDatabase
+from src.llm_client import HEALpacaClient
 logger = logging.getLogger(__name__)
 
 

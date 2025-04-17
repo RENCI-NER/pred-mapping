@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Extra, Field
 from typing import List
-import biolink_predicate_lookup as blp
+from src import biolink_predicate_lookup as blp
 
 logging.basicConfig(level=logging.INFO)
 
@@ -43,8 +43,8 @@ class HEALpacaInput(BaseModel):
 
 
 # Constants for precomputed files
-DESCRIPTION_FILE = os.path.join("data", "short_description.json")
-VECTOR_DB_FILE = os.path.join("data", "all_biolink_mapped_vectors.json")
+DESCRIPTION_FILE = os.path.join("..", "data", "short_description.json")
+VECTOR_DB_FILE = os.path.join("..", "data", "all_biolink_mapped_vectors.json")
 
 
 @app.post("/query/")

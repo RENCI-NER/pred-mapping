@@ -24,7 +24,33 @@ The system originally from [LitCoin](https://github.com/ncats/LitCoin/blob/main/
 [LitCoin](https://github.com/ncats/LitCoin/blob/main/predicates/README.md)
 
 ## FastAPI Inference 
-From the terminal: 
+
+From the terminal, Start the server: 
 ```bash
 uvicorn main:app --reload 
+```
+
+Send a POST request to /query/ with a list of input triples
+```angular2html
+[
+  {
+    "subject": "mutation",
+    "object": "ALD gene",
+    "abstract": "Fragments of the adrenoleukodystrophy (ALD) cDNA from a patient with adolescent ALD...",
+    "relationship": "found in"
+  }
+```
+
+Example response: 
+```angular2html
+{
+  "results": [
+    {
+      "subject": "mutation",
+      "object": "ALD gene",
+      "predicate": "biolink:causes",
+      "score": 0.92
+    }
+  ]
+}
 ```
