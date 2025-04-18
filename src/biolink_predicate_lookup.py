@@ -39,7 +39,7 @@ class PredicateClient(HEALpacaClient):
     def __init__( self, **kwargs ):
         super().__init__(**kwargs)
 
-    def check_relationship(self, relationships_json: list[dict], is_vdb = False) -> list:
+    def check_relationship(self, relationships_json: list[dict], is_vdb = False, is_nn= False) -> list:
         """ Send options for a single relationship to OpenAI LLM """
         """ Send options for a single relationship to LLM """
         model = self.chat_model
@@ -49,11 +49,15 @@ class PredicateClient(HEALpacaClient):
             ai_response = self.get_chat_completion(prompt)
             choices = list(relationship_json.get("predicate_choices").keys())
             top_choice = extract_mapped_predicate(ai_response, choices)
-            print(top_choice)
             relationship_json["top_choice"] = {
-                "model": model if top_choice else ("nearest_neighbors" if is_vdb else "NP_similarities"),
                 "predicate": top_choice or f'biolink:{choices[0].replace(" ", "_")}',
                 "qualifier": "",
+                "selector": (
+                    model if top_choice
+                    else "vectorDB" if is_vdb
+                    else "similarities" if is_nn
+                    else "nearest_neighbors"
+                )
             }
             relationship_json.pop("predicate_choices", None)
             relationships.append(relationship_json)
@@ -78,20 +82,23 @@ def parse_new_llm_response(llm_response: Union[str, list[dict]]) -> list[dict]:
     return parsed
 
 
-def relationship_queries_to_batch(query_results: list[dict], descriptions) -> list[dict]:
+def relationship_queries_to_batch(query_results: list[dict], descriptions, is_vdb, is_nn) -> list[dict]:
     batch_data = []
     batch_keys = [
+        "Top-n candidates",
         "subject",
         "object",
         "relationship",
         "abstract",
-        "nearest_neighbors",
     ]
+    method = "vectorDb" if is_vdb else ("nearest_neighbors" if is_nn else "similarities")
     for edge in query_results:
         batch_edge = {key: val for key, val in edge.items() if key in batch_keys}
-        predicate_choices = batch_edge["nearest_neighbors"].keys()
+        batch_edge["Top-n retrieval_method"] = method
+        predicate_choices = batch_edge["Top-n candidates"].keys()
         predicate_choices = {k: descriptions.get(k, k) for k in predicate_choices}
         batch_edge["predicate_choices"] = predicate_choices
+        batch_edge["Top-n candidates"] = {i : {"mapped_predicate": k,  "score": v} for i, (k, v) in enumerate(batch_edge["Top-n candidates"].items())}
         batch_data.append(batch_edge)
     return batch_data
 
@@ -125,7 +132,7 @@ def lookup_unique_predicates(parsed_data: list[dict], db: PredicateDatabase, out
                 except AttributeError:
                     pass
 
-            edge["nearest_neighbors"] = {
+            edge["Top-n candidates"] = {
                 predicate.replace("_", " "): score
                 for predicate, score in sorted(unique_predicates.items(), key=lambda item: item[1], reverse=True)
             }
@@ -237,113 +244,3 @@ def find_key_from_value(val, choices):
     except Exception as e:
         print(f" Exception: {e} for {val}")
     return None
-
-
-
-# def extract_mapped_predicate( response_text, choices ):
-#     if response_text is None:
-#         return None
-#
-#     # 1. Normalize known wrapping formats
-#     cleaned_text = response_text.strip()
-#
-#     # 2. Remove triple backticks and possible language tag like ```json
-#     cleaned_text = re.sub(r'```(?:json)?\n?', '', cleaned_text).strip("` \n")
-#
-#     # 3. Match JSON/Python-style dict with mapped_predicate key
-#     patterns = [
-#         r'\{[^{}]*["\']mapped_predicate["\']\s*:\s*[^{}]*?\}',  # Normal JSON/dict format
-#         r'["\']mapped_predicate["\']\s*:\s*null',  # Handles null values
-#         r'\{[^{}]*["\']mapped_predicate["\']\s*:\s*["\'].*?["\'].*?\}',  # Explicit string values
-#     ]
-#
-#     for pattern in patterns:
-#         match = re.search(pattern, cleaned_text, re.DOTALL | re.IGNORECASE)
-#         if match:
-#             json_candidate = match.group().strip()
-#
-#             # Handle lone "mapped_predicate: null"
-#             if 'null' in json_candidate.lower():
-#                 return "none"
-#
-#             try:
-#                 parsed = json.loads(json_candidate)
-#             except json.JSONDecodeError:
-#                 try:
-#                     parsed = ast.literal_eval(json_candidate)
-#                 except Exception as e:
-#                     print(f"Fallback parsing failed: {e}")
-#                     continue
-#
-#             mapped = parsed.get("mapped_predicate")
-#             if not mapped:
-#                 return "none"
-#
-#             mapped = mapped.strip().lower()
-#             if mapped in choices:
-#                 return f'biolink:{mapped.replace(" ", "_")}'
-#             else:
-#                 if isinstance(mapped, dict):
-#                     mapped_from_value = find_key_from_value(mapped, choices)
-#                     if mapped_from_value:
-#                         return mapped_from_value
-#                     else:
-#                         print(f"Mapped predicate '{mapped}' not in choices.")
-#                         return mapped
-#
-#     # 4. Additional support: malformed JSON-like dicts (e.g. missing closing brace)
-#     malformed_pattern = r'["\']mapped_predicate["\']\s*:\s*["\']([^"\'}\n\r]+)["\']?'
-#     match = re.search(malformed_pattern, cleaned_text, re.IGNORECASE)
-#     if match:
-#         mapped = match.group(1).strip().lower()
-#         if mapped in choices:
-#             return f'biolink:{mapped.replace(" ", "_")}'
-#         else:
-#             if isinstance(mapped, dict):
-#                 mapped_from_value = find_key_from_value(mapped, choices)
-#                 if mapped_from_value:
-#                     return mapped_from_value
-#                 else:
-#                     print(f"Malformed match. Mapped predicate '{mapped}' not in choices.")
-#                     return mapped
-#
-#     # 5. Fallback: Natural language like `the mapped predicate is 'treats'`
-#     nl_matches = re.findall(
-#         r'(?:mapped[_ ]predicate[^a-zA-Z0-9]*)?[`\'"]([a-zA-Z0-9_ \-]+)[`\'"]',
-#         cleaned_text,
-#         flags=re.IGNORECASE
-#     )
-#     for match in reversed(nl_matches):  # Try last match first
-#         mapped = match.strip().lower()
-#         if mapped in choices:
-#             return f'biolink:{mapped.replace(" ", "_")}'
-#         else:
-#             if isinstance(mapped, dict):
-#                 mapped_from_value = find_key_from_value(mapped, choices)
-#                 if mapped_from_value:
-#                     return mapped_from_value
-#                 else:
-#                     print(f"Malformed match. Mapped predicate '{mapped}' not in choices.")
-#                     return mapped
-#
-#     # 6. Final fallback: Raw guess
-#     mapped = cleaned_text.lower()
-#     if mapped in choices:
-#         return f'biolink:{mapped.replace(" ", "_")}'
-#     else:
-#         if isinstance(mapped, dict):
-#             mapped_from_value = find_key_from_value(mapped, choices)
-#             if mapped_from_value:
-#                 return mapped_from_value
-#
-#     print("Bad format! Returning raw response:", response_text)
-#     return mapped
-#
-#
-# def find_key_from_value( val, choices ):
-#     """Reverse-lookup: return key whose value matches val (case-insensitive)."""
-#     val = val.strip().lower()
-#     for key, value in choices.items():
-#         if val == value.strip().lower():
-#             return f'biolink:{key.replace(" ", "_")}'
-#     return None

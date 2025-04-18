@@ -1,6 +1,7 @@
 import json
 import numpy as np
 import torch
+from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cdist
 from vectordb import InMemoryExactNNVectorDB
 from docarray import BaseDoc, DocList
@@ -14,13 +15,14 @@ class PredicateText(BaseDoc):
 
 
 class PredicateDatabase:
-    def __init__(self, client, is_vdb = False):
+    def __init__(self, client, is_vdb = False, is_nn=False):
         self.all_pred_emb = None
         self.all_pred_texts = None
         self.all_pred = None
         self.db = None
         self.client = client
         self.is_vdb = is_vdb
+        self.is_nn = is_nn
 
     def load_db_from_json(self, embeddings_file):
         print("Loading json")
@@ -43,10 +45,11 @@ class PredicateDatabase:
             print("Load vectordb")
             self.db = InMemoryExactNNVectorDB[PredicateText](workspace='./workspace')
             self.db.index(inputs=DocList[PredicateText](doc_list))
-        self.all_pred_texts = [e.get("text", "") for e in embeddings]
-        self.all_pred = [e.get("predicate", "") for e in embeddings]
-        self.all_pred_emb = [e.get("embedding", []) for e in embeddings]
-        self.all_pred_emb = transform_embedding(self.all_pred_emb)
+        else:
+            self.all_pred_texts = [e.get("text", "") for e in embeddings]
+            self.all_pred = [e.get("predicate", "") for e in embeddings]
+            self.all_pred_emb = [e.get("embedding", []) for e in embeddings]
+            self.all_pred_emb = transform_embedding(self.all_pred_emb)
         print("Ready")
 
     def search(self, text, embedding=None, num_results=10):
@@ -67,20 +70,36 @@ class PredicateDatabase:
                 i: {"text": t, "mapped_predicate": p, "score": round(s, 4)} for i, (t, p, s) in enumerate(zip(texts, predicates, scores))
             }
             return results_dict
+
         embedding = transform_embedding(embedding)
 
-        dist = 1 - cdist([embedding.cpu().detach().numpy()], self.all_pred_emb, metric="cosine")
-        count_dist = np.argpartition(dist, num_results, axis=None)
-        result_dist = np.sort(dist[0, count_dist[:num_results]], axis=None)
-        indices = [list(np.asarray(np.where(dist.flatten() == d)).flatten())
-                   for d in result_dist]
+        if self.is_nn:
+            model = NearestNeighbors(n_neighbors=num_results, metric="cosine")
+            model.fit(self.all_pred_emb)
+            dist, indices = model.kneighbors([embedding])
+            similarities = 1 - dist
+
+            return {
+                idx: {
+                    "text": self.all_pred_texts[idx],
+                    "mapped_predicate": self.all_pred[idx],
+                    "score": float(round(sim, 4))
+                }
+                for idx, sim in zip(indices[0], similarities[0])
+            }
+
+        similarities = 1 - cdist([embedding.cpu().detach().numpy()], self.all_pred_emb, metric="cosine")
+        count_dist = np.argpartition(similarities, num_results, axis=None)
+        result_similarities = np.sort(similarities[0, count_dist[:num_results]], axis=None)
+        indices = [list(np.asarray(np.where(similarities.flatten() == d)).flatten())
+                   for d in result_similarities]
         indices = sum(indices, [])
         return {
             idx:
             {
                 "text": self.all_pred_texts[idx],
                 "mapped_predicate": self.all_pred[idx],
-                "score": round(dist[0, idx], 4)
+                "score": round(similarities[0, idx], 4)
             }
             for idx in indices[:num_results]
         }

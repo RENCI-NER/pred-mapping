@@ -1,8 +1,9 @@
 import json
+from enum import Enum
 from pathlib import Path
 import logging
 import traceback
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Extra, Field
 from typing import List
@@ -36,28 +37,43 @@ class HEALpacaInput(BaseModel):
         extra = Extra.forbid
 
 
+class RetrievalMethod(str, Enum):
+    nn = "nearest_neighbor"
+    sim = "cosine_similarities"
+    vectordb = "vectordb"
+
 BASE_DIR = Path(__file__).resolve().parent
 DESCRIPTION_FILE = BASE_DIR / "data" / "short_description.json"
 EMBEDDING_FILE = BASE_DIR / "data" / "all_biolink_mapped_vectors.json"
 
 
 @app.post("/query/")
-async def query_predicate(triples: List[HEALpacaInput]):
+async def query_predicate(
+        triples: List[HEALpacaInput],
+        retrieval_method: RetrievalMethod
+    ):
     try:
         input_data = [triple.dict() for triple in triples]
-        results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE)
+
+        if retrieval_method.value == "vectordb":
+            results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE, is_vdb=True, is_nn=False)
+        elif retrieval_method.value == "nearest_neighbor":
+            results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE, is_vdb=False, is_nn=True)
+        else:
+            results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE)
+
         return {"results": results}
+
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
-def run_query(triple_input: list, description_file: str, embedding_file: str):
+def run_query(triple_input: list, description_file: str, embedding_file: str, is_vdb=False, is_nn=False):
     llm = blp.PredicateClient()
     with open(embedding_file, "r") as f:
         predicate_embedding = json.load(f)
     logging.info(f"Initializing the DB with {len(predicate_embedding)} predicate embeddings.... ")
-    db = blp.PredicateDatabase(client=llm, is_vdb=True)
+    db = blp.PredicateDatabase(client=llm, is_vdb=is_vdb, is_nn=is_nn)
     db.populate_db(predicate_embedding)
 
     data = blp.parse_new_llm_response(triple_input)
@@ -67,7 +83,7 @@ def run_query(triple_input: list, description_file: str, embedding_file: str):
     logging.info(f"Reranking and Selecting top predicate choice .... ")
     with open(description_file, "r") as f:
         predicate_descriptions = json.load(f)
-    relationships = blp.relationship_queries_to_batch(relationships, predicate_descriptions)
-    output_triples = llm.check_relationship(relationships, db.is_vdb)
+    relationships = blp.relationship_queries_to_batch(relationships, predicate_descriptions, db.is_vdb, db.is_nn)
+    output_triples = llm.check_relationship(relationships, db.is_vdb, db.is_nn)
     return output_triples
 

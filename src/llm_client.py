@@ -68,27 +68,27 @@ class HEALpacaClient(LLMClient):
         self.api_url = api_url
         self.embedding_url = embedding_url
 
-    # def get_embedding(self, text: str) -> list:
-    #     return _cached_embedding_request(text)
-    def get_embedding( self, text: str ) -> list:
-        """ Get embedding for a single text string """
-        request = self.embedding_request(text)
-        headers = {"Content-Type": "application/json"}
 
-        response = requests.post(self.embedding_url, json=request, headers=headers)
-
-        if response.status_code == 200:
-            return response.json()["embedding"]
-        else:
-            print(Exception(f"Error Code: {response.status_code}"))
-            return None
+    def get_embedding(self, text: str) -> list:
+        return _cached_embedding_request(text)
+    # def get_embedding( self, text: str ) -> list:
+    #     """ Get embedding for a single text string """
+    #     request = self.embedding_request(text)
+    #     headers = {"Content-Type": "application/json"}
+    #
+    #     response = requests.post(self.embedding_url, json=request, headers=headers)
+    #
+    #     if response.status_code == 200:
+    #         return response.json()["embedding"]
+    #     else:
+    #         print(Exception(f"Error Code: {response.status_code}"))
+    #         return None
 
     def get_chat_completion(self, prompt: str):
         """ Get single chat response """
         request = self.chat_request(prompt)
         headers = {"Content-Type": "application/json"}
         response = requests.post(self.api_url, json=request, headers=headers)
-        print(response)
         if response.status_code == 200:
             try:
                 data = response.json().get("response", "")
