@@ -4,8 +4,10 @@ docarray==0.41.0
 fastapi==0.115.12
 numpy==2.2.4
 pydantic==2.11.3
+pytest==8.2.2
 pytest==8.3.5
 Requests==2.32.3
+scikit_learn==1.6.1
 scipy==1.15.2
 torch==2.6.0
 vectordb==0.0.21
