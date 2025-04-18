@@ -1,11 +1,19 @@
+import os
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
-from main import app
+from main import app, RetrievalMethod
 
 client = TestClient(app)
 
 
-def xtest_query_endpoint():
+@pytest.fixture(scope="session")
+def is_ci_env():
+    return os.environ.get("CI", "false").lower() == "true"
+
+
+@pytest.mark.usefixtures("is_ci_env")
+def test_query_endpoint():
     test_payload = [
         {
             "abstract": (
@@ -23,7 +31,16 @@ def xtest_query_endpoint():
         }
     ]
 
-    response = client.post("/query/", json=test_payload)
+    if is_ci_env:
+        with patch("src.biolink_predicate_lookup.PredicateClient.get_chat_completion") as mock_chat, \
+                patch("src.biolink_predicate_lookup.PredicateClient.get_embedding") as mock_embed:
+
+            mock_embed.return_value = [0.1] * 768
+            mock_chat.return_value = '{"mapped_predicate": "biolink:treats"}'
+
+            response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
+    else:
+        response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
 
     assert response.status_code == 200
     data = response.json()

@@ -55,8 +55,8 @@ class PredicateClient(HEALpacaClient):
                 "selector": (
                     model if top_choice
                     else "vectorDB" if is_vdb
-                    else "similarities" if is_nn
-                    else "nearest_neighbors"
+                    else "nearest_neighbors" if is_nn
+                    else "similarities"
                 )
             }
             relationship_json.pop("predicate_choices", None)
@@ -95,10 +95,10 @@ def relationship_queries_to_batch(query_results: list[dict], descriptions, is_vd
     for edge in query_results:
         batch_edge = {key: val for key, val in edge.items() if key in batch_keys}
         batch_edge["Top-n retrieval_method"] = method
-        predicate_choices = batch_edge["Top-n candidates"].keys()
+        predicate_choices = batch_edge.get("Top-n candidates", {}).keys()
         predicate_choices = {k: descriptions.get(k, k) for k in predicate_choices}
         batch_edge["predicate_choices"] = predicate_choices
-        batch_edge["Top-n candidates"] = {i : {"mapped_predicate": k,  "score": v} for i, (k, v) in enumerate(batch_edge["Top-n candidates"].items())}
+        batch_edge["Top-n candidates"] = {i : {"mapped_predicate": k,  "score": v} for i, (k, v) in enumerate(batch_edge.get("Top-n candidates", {}).items())}
         batch_data.append(batch_edge)
     return batch_data
 
@@ -120,22 +120,22 @@ def lookup_unique_predicates(parsed_data: list[dict], db: PredicateDatabase, out
                 embedding=edge["relationship_embedding"],
                 num_results=num_results
             )
+            if search_results:
+                # we'd like to keep the scores
+                unique_predicates = {search_results[key]["mapped_predicate"].replace("biolink:", "").replace("_NEG", ""):
+                                         search_results[key]["score"] for key in search_results}
 
-            # we'd like to keep the scores
-            unique_predicates = {search_results[key]["mapped_predicate"].replace("biolink:", "").replace("_NEG", ""):
-                                     search_results[key]["score"] for key in search_results}
+                for predicate in unique_predicates.copy():
+                    try:  # Avoid failing when attempting to add inverse of qualifiedPredicates which 'as it is' doesn't exist in biolink
+                        if t.get_element(predicate).inverse is not None:
+                            unique_predicates.update({t.get_element(predicate).inverse: unique_predicates[predicate]})
+                    except AttributeError:
+                        pass
 
-            for predicate in unique_predicates.copy():
-                try:  # Avoid failing when attempting to add inverse of qualifiedPredicates which 'as it is' doesn't exist in biolink
-                    if t.get_element(predicate).inverse is not None:
-                        unique_predicates.update({t.get_element(predicate).inverse: unique_predicates[predicate]})
-                except AttributeError:
-                    pass
-
-            edge["Top-n candidates"] = {
-                predicate.replace("_", " "): score
-                for predicate, score in sorted(unique_predicates.items(), key=lambda item: item[1], reverse=True)
-            }
+                edge["Top-n candidates"] = {
+                    predicate.replace("_", " "): score
+                    for predicate, score in sorted(unique_predicates.items(), key=lambda item: item[1], reverse=True)
+                }
         except KeyError as e:
             print(e)
             print(json.dumps(edge, indent=2))

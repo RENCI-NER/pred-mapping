@@ -42,6 +42,7 @@ class RetrievalMethod(str, Enum):
     sim = "cosine_similarities"
     vectordb = "vectordb"
 
+
 BASE_DIR = Path(__file__).resolve().parent
 DESCRIPTION_FILE = BASE_DIR / "data" / "short_description.json"
 EMBEDDING_FILE = BASE_DIR / "data" / "all_biolink_mapped_vectors.json"
@@ -54,19 +55,17 @@ async def query_predicate(
     ):
     try:
         input_data = [triple.dict() for triple in triples]
-
         if retrieval_method.value == "vectordb":
             results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE, is_vdb=True, is_nn=False)
         elif retrieval_method.value == "nearest_neighbor":
             results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE, is_vdb=False, is_nn=True)
         else:
             results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE)
-
         return {"results": results}
-
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 def run_query(triple_input: list, description_file: str, embedding_file: str, is_vdb=False, is_nn=False):
     llm = blp.PredicateClient()
