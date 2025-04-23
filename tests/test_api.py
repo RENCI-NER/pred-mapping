@@ -1,3 +1,5 @@
+# export PYTHONPATH="$PYTHONPATH:$PWD"
+
 import os
 import pytest
 from unittest.mock import patch
@@ -12,8 +14,7 @@ def is_ci_env():
     return os.environ.get("CI", "false").lower() == "true"
 
 
-@pytest.mark.usefixtures("is_ci_env")
-def test_query_endpoint():
+def test_query_endpoint(is_ci_env):
     test_payload = [
         {
             "abstract": (
@@ -31,6 +32,21 @@ def test_query_endpoint():
         }
     ]
 
+    test_payload1 = [
+        {
+            "subject": "Betaine",
+            "object": "Bcl-2",
+            "relationship": "increases expression of",
+            "abstract": (
+                "The present study was designed to investigate the cardioprotective effects of betaine on acute myocardial ischemia induced experimentally in rats focusing on regulation of signal transducer and activator of transcription 3 (STAT3) and apoptotic pathways as the potential mechanism underlying the drug effect. "
+                 "Male Sprague Dawley rats were treated with betaine (100, 200, and 400 mg/kg) orally for 40 days. Acute myocardial ischemic injury was induced in rats by subcutaneous injection of isoproterenol (85 mg/kg), for two consecutive days. Serum cardiac marker enzyme, histopathological variables and expression of protein levels were analyzed. "
+                 "Oral administration of betaine (200 and 400 mg/kg) significantly reduced the level of cardiac marker enzyme in the serum and prevented left ventricular remodeling. Western blot analysis showed that isoproterenol-induced phosphorylation of STAT3 was maintained or further enhanced by betaine treatment in myocardium. "
+                 "Furthermore, betaine (200 and 400 mg/kg) treatment increased the ventricular expression of Bcl-2 and reduced the level of Bax, therefore causing a significant increase in the ratio of Bcl-2/Bax. "
+                 "The protective role of betaine on myocardial damage was further confirmed by histopathological examination. In summary, our results showed that betaine pretreatment attenuated isoproterenol-induced acute myocardial ischemia via the regulation of STAT3 and apoptotic pathways."
+            )
+          }
+    ]
+
     if is_ci_env:
         with patch("src.biolink_predicate_lookup.PredicateClient.get_chat_completion") as mock_chat, \
                 patch("src.biolink_predicate_lookup.PredicateClient.get_embedding") as mock_embed:
@@ -40,7 +56,7 @@ def test_query_endpoint():
 
             response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
     else:
-        response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
+        response = client.post("/query/", json=test_payload1, params={"retrieval_method": RetrievalMethod.nn.value})
 
     assert response.status_code == 200
     data = response.json()
@@ -48,3 +64,5 @@ def test_query_endpoint():
     assert isinstance(data["results"], list)
     assert len(data["results"]) == 1
     assert "top_choice" in data["results"][0]
+
+
