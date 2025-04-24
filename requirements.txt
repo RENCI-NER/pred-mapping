@@ -1,12 +1,14 @@
 aiohttp==3.11.16
 bmt==1.4.4
-docarray==0.41.0
+docarray~=0.40.0
 fastapi==0.115.12
 numpy==2.2.4
 pydantic==2.11.3
 pytest==8.3.5
-Requests==2.32.3
-scikit_learn==1.6.1
+requests==2.32.3
 scipy==1.15.2
 torch==2.6.0
 vectordb==0.0.21
+httpx~=0.28.1
+scikit-learn~=1.6.1
+PyYAML~=6.0.2

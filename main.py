@@ -6,7 +6,7 @@ import traceback
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Extra, Field
-from typing import List
+from typing import List, Dict, Optional
 from src import biolink_predicate_lookup as blp
 
 app = FastAPI()
@@ -21,17 +21,15 @@ app.add_middleware(
 
 class HEALpacaInput(BaseModel):
     abstract: str = Field(..., example=(
-        "Despite increasing reports on nonionic contrast media-induced nephropathy (CIN) in hospitalized adult patients during cardiac procedures, the studies in pediatrics are limited, with even less focus on possible predisposing factors and preventive measures for patients undergoing cardiac angiography. "
-        "This prospective study determined the incidence of CIN for two nonionic contrast media (CM), iopromide and iohexol, among 80 patients younger than 18 years and compared the rates for this complication in relation to the type and dosage of CM and the presence of cyanosis. "
-        "The 80 patients in the study consecutively received either iopromide (group A, n = 40) or iohexol (group B, n = 40). Serum sodium (Na), potassium (K), and creatinine (Cr) were measured 24 h before angiography as baseline values, then measured again at 12-, 24-, and 48-h intervals after CM use. Urine samples for Na and Cr also were checked at the same intervals. "
-        "Risk of renal failure, Injury to the kidney, Failure of kidney function, Loss of kidney function, and End-stage renal damage (RIFLE criteria) were used to define CIN and its incidence in the study population. Accordingly, among the 15 CIN patients (18.75%), 7.5% of the patients in group A had increased risk and 3.75% had renal injury, whereas 5% of group B had increased risk and 2.5% had renal injury. "
-        "Whereas 33.3% of the patients with CIN were among those who received the proper dosage of CM, the percentage increased to 66.6% among those who received larger doses, with a significant difference in the incidence of CIN related to the different dosages of CM (p = 0.014). "
-        "Among the 15 patients with CIN, 6 had cyanotic congenital heart diseases, but the incidence did not differ significantly from that for the noncyanotic patients (p = 0.243). Although clinically silent, CIN is not rare in pediatrics. "
-        "The incidence depends on dosage but not on the type of consumed nonionic CM, nor on the presence of cyanosis, and although CIN usually is reversible, more concern is needed for the prevention of such a complication in children."
+        "The present study was designed to investigate the cardioprotective effects of betaine on acute myocardial ischemia induced experimentally in rats focusing on regulation of signal transducer and activator of transcription 3 (STAT3) and apoptotic pathways as the potential mechanism underlying the drug effect. "
+        "Male Sprague Dawley rats were treated with betaine (100, 200, and 400 mg/kg) orally for 40 days. Acute myocardial ischemic injury was induced in rats by subcutaneous injection of isoproterenol (85 mg/kg), for two consecutive days. Serum cardiac marker enzyme, histopathological variables and expression of protein levels were analyzed. "
+        "Oral administration of betaine (200 and 400 mg/kg) significantly reduced the level of cardiac marker enzyme in the serum and prevented left ventricular remodeling. Western blot analysis showed that isoproterenol-induced phosphorylation of STAT3 was maintained or further enhanced by betaine treatment in myocardium. "
+        "Furthermore, betaine (200 and 400 mg/kg) treatment increased the ventricular expression of Bcl-2 and reduced the level of Bax, therefore causing a significant increase in the ratio of Bcl-2/Bax. "
+        "The protective role of betaine on myocardial damage was further confirmed by histopathological examination. In summary, our results showed that betaine pretreatment attenuated isoproterenol-induced acute myocardial ischemia via the regulation of STAT3 and apoptotic pathways."
     ))
-    subject: str = Field(..., example="Asenapine")
-    object: str = Field(..., example="Schizophrenia")
-    relationship: str = Field(..., example="treats")
+    subject: str = Field(..., example="Betaine")
+    object: str = Field(..., example="Bcl-2")
+    relationship: str = Field(..., example="increases expression of")
 
     class Config:
         extra = Extra.forbid
@@ -43,31 +41,69 @@ class RetrievalMethod(str, Enum):
     vectordb = "vectordb"
 
 
+class Candidate(BaseModel):
+    mapped_predicate: str
+    score: float
+
+
+class PredicateChoice(BaseModel):
+    predicate: str
+    object_aspect_qualifier: Optional[str] = ""
+    object_direction_qualifier: Optional[str] = ""
+    selector: str
+
+
+class PredicateResult(BaseModel):
+    subject: str
+    object: str
+    relationship: str
+    abstract: str
+    top_choice: PredicateChoice
+    Top_n_candidates: Dict[int, Candidate]
+    Top_n_retrieval_method: str  # e.g., "nearest_neighbors"
+
+
+class QueryResponse(BaseModel):
+    results: List[PredicateResult]
+
+
 BASE_DIR = Path(__file__).resolve().parent
 DESCRIPTION_FILE = BASE_DIR / "data" / "short_description.json"
 EMBEDDING_FILE = BASE_DIR / "data" / "all_biolink_mapped_vectors.json"
+QUALIFIED_PREDICATE_FILE = BASE_DIR / "data" / "qualified_predicate_mapping.json"
 
 
-@app.post("/query/")
+@app.post("/query/",
+          summary="Get a standard predicate for a subject-object pair",
+          description="Uses a similarity search to determine the top-n biolink predicates for each triple then re-ranks to select the best",
+          tags=["Relation Extraction"],
+          response_model=QueryResponse
+          )
 async def query_predicate(
         triples: List[HEALpacaInput],
-        retrieval_method: RetrievalMethod
-    ):
+        retrieval_method: RetrievalMethod = Query(
+            default=RetrievalMethod.sim,
+            include_in_schema=False
+        )
+):
     try:
-        input_data = [triple.dict() for triple in triples]
+        input_data = [triple.model_dump() for triple in triples]
         if retrieval_method.value == "vectordb":
-            results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE, is_vdb=True, is_nn=False)
+            results = await run_query(input_data, QUALIFIED_PREDICATE_FILE, DESCRIPTION_FILE, EMBEDDING_FILE,
+                                      is_vdb=True, is_nn=False)
         elif retrieval_method.value == "nearest_neighbor":
-            results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE, is_vdb=False, is_nn=True)
+            results = await run_query(input_data, QUALIFIED_PREDICATE_FILE, DESCRIPTION_FILE, EMBEDDING_FILE,
+                                      is_vdb=False, is_nn=True)
         else:
-            results = run_query(input_data, DESCRIPTION_FILE, EMBEDDING_FILE)
+            results = await run_query(input_data, QUALIFIED_PREDICATE_FILE, DESCRIPTION_FILE, EMBEDDING_FILE)
         return {"results": results}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def run_query(triple_input: list, description_file: str, embedding_file: str, is_vdb=False, is_nn=False):
+async def run_query(triple_input: list, qualifiedPredicate_file: str, description_file: str, embedding_file: str,
+                     is_vdb=False, is_nn=False):
     llm = blp.PredicateClient()
     with open(embedding_file, "r") as f:
         predicate_embedding = json.load(f)
@@ -77,12 +113,13 @@ def run_query(triple_input: list, description_file: str, embedding_file: str, is
 
     data = blp.parse_new_llm_response(triple_input)
     logging.info(f"Vector Searching {len(triple_input)} Data.... ")
-    relationships = blp.lookup_unique_predicates(data, db)
+    relationships = await blp.lookup_unique_predicates(data, db)
 
     logging.info(f"Reranking and Selecting top predicate choice .... ")
     with open(description_file, "r") as f:
         predicate_descriptions = json.load(f)
+    with open(qualifiedPredicate_file, "r") as f:
+        qualified_predicate = json.load(f)
     relationships = blp.relationship_queries_to_batch(relationships, predicate_descriptions, db.is_vdb, db.is_nn)
-    output_triples = llm.check_relationship(relationships, db.is_vdb, db.is_nn)
+    output_triples = await llm.check_relationship(relationships, qualified_predicate, db.is_vdb, db.is_nn)
     return output_triples
-

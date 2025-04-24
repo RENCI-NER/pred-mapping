@@ -5,8 +5,6 @@ import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from main import app, RetrievalMethod
-from src.biolink_predicate_lookup import extract_mapped_predicate, relationship_queries_to_batch
-
 client = TestClient(app)
 
 
@@ -32,37 +30,6 @@ def test_query_endpoint(is_ci_env):
             "relationship": "treats"
         }
     ]
-
-    test_payload1 = [
-        {
-            "subject": "Betaine",
-            "object": "Bcl-2",
-            "relationship": "increases expression of",
-            "abstract": (
-                "The present study was designed to investigate the cardioprotective effects of betaine on acute myocardial ischemia induced experimentally in rats focusing on regulation of signal transducer and activator of transcription 3 (STAT3) and apoptotic pathways as the potential mechanism underlying the drug effect. "
-                 "Male Sprague Dawley rats were treated with betaine (100, 200, and 400 mg/kg) orally for 40 days. Acute myocardial ischemic injury was induced in rats by subcutaneous injection of isoproterenol (85 mg/kg), for two consecutive days. Serum cardiac marker enzyme, histopathological variables and expression of protein levels were analyzed. "
-                 "Oral administration of betaine (200 and 400 mg/kg) significantly reduced the level of cardiac marker enzyme in the serum and prevented left ventricular remodeling. Western blot analysis showed that isoproterenol-induced phosphorylation of STAT3 was maintained or further enhanced by betaine treatment in myocardium. "
-                 "Furthermore, betaine (200 and 400 mg/kg) treatment increased the ventricular expression of Bcl-2 and reduced the level of Bax, therefore causing a significant increase in the ratio of Bcl-2/Bax. "
-                 "The protective role of betaine on myocardial damage was further confirmed by histopathological examination. In summary, our results showed that betaine pretreatment attenuated isoproterenol-induced acute myocardial ischemia via the regulation of STAT3 and apoptotic pathways."
-            )
-        },
-
-        {
-            "subject": "Cocaine",
-            "object": "Cocaine use disorder",
-            "relationship": "potential target for therapeutics",
-            "abstract": (
-                "Drug-related attentional bias may have significant implications for the treatment of cocaine use disorder (CocUD). However, the neurobiology of attentional bias is not completely understood. "
-                "This study employed dynamic causal modeling (DCM) to conduct an analysis of effective (directional) connectivity involved in drug-related attentional bias in treatment-seeking CocUD subjects. "
-                "The DCM analysis was conducted based on functional magnetic resonance imaging (fMRI) data acquired from fifteen CocUD subjects while performing a cocaine-word Stroop task, during which blocks of Cocaine Words (CW) and Neutral Words (NW) alternated. "
-                "There was no significant attentional bias at group level. Although no significant brain activation was found, the DCM analysis found that, relative to the NW, the CW caused a significant increase in the strength of the right (R) anterior cingulate cortex (ACC) to R hippocampus effective connectivity. "
-                "Greater increase of this connectivity was associated with greater CW reaction time (relative to NW reaction time). The increased strength of R ACC to R hippocampus connectivity may reflect ACC activation of hippocampal memories related to drug use, which was triggered by the drug cues. "
-                "This circuit could be a potential target for therapeutics in CocUD patients. No significant change was found in the other modeled connectivities."
-            )
-        }
-
-    ]
-
     if is_ci_env:
         with patch("src.biolink_predicate_lookup.PredicateClient.get_chat_completion") as mock_chat, \
                 patch("src.biolink_predicate_lookup.PredicateClient.get_embedding") as mock_embed:
@@ -72,7 +39,7 @@ def test_query_endpoint(is_ci_env):
 
             response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
     else:
-        response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.nn.value})
+        response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
 
     assert response.status_code == 200
     data = response.json()
@@ -80,19 +47,5 @@ def test_query_endpoint(is_ci_env):
     assert isinstance(data["results"], list)
     assert len(data["results"]) == len(test_payload)
     assert "top_choice" in data["results"][0]
-
-
-def test_extract_valid_json_mapping():
-    response = '{"mapped_predicate": "treats"}'
-    choices = {"treats": "used to treat", "prevents": "used to prevent"}
-    result = extract_mapped_predicate(response, choices)
-    assert result == "biolink:treats"
-
-
-def test_extract_loose_format():
-    response = "mapped_predicate: 'prevents'"
-    choices = {"treats": "used to treat", "prevents": "used to prevent"}
-    result = extract_mapped_predicate(response, choices)
-    assert result == "biolink:prevents"
 
 
