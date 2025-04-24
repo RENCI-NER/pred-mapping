@@ -25,7 +25,7 @@ class PredicateDatabase:
         self.is_nn = is_nn
 
     def load_db_from_json(self, embeddings_file):
-        print("Loading json")
+        # print("Loading json")
         with open(embeddings_file, "r") as f:
             embeddings = json.load(f)
         self.populate_db(embeddings)
@@ -42,7 +42,7 @@ class PredicateDatabase:
                             embedding=entry["embedding"]
                         )
                     )
-            print("Load vectordb")
+            # print("Load vectordb")
             self.db = InMemoryExactNNVectorDB[PredicateText](workspace='./workspace')
             self.db.index(inputs=DocList[PredicateText](doc_list))
         else:
@@ -50,12 +50,12 @@ class PredicateDatabase:
             self.all_pred = [e.get("predicate", "") for e in embeddings]
             self.all_pred_emb = [e.get("embedding", []) for e in embeddings]
             self.all_pred_emb = transform_embedding(self.all_pred_emb)
-        print("Ready")
+        # print("Ready")
 
-    def search(self, text, embedding=None, num_results=10):
+    async def search(self, text, embedding=None, num_results=10):
         if embedding is None:
-            embedding = self.client.get_embedding(text)
-        if not embedding:
+            embedding = await self.client.get_embedding(text)
+        if embedding is None or (hasattr(embedding, '__len__') and len(embedding) == 0):
             return None
 
         if self.is_vdb:
@@ -67,7 +67,11 @@ class PredicateDatabase:
             scores = [score for score in results[0].scores]
 
             results_dict = {
-                i: {"text": t, "mapped_predicate": p, "score": round(s, 4)} for i, (t, p, s) in enumerate(zip(texts, predicates, scores))
+                i: {
+                    "text": t,
+                    "mapped_predicate": p,
+                    "score": float(s)
+                } for i, (t, p, s) in enumerate(zip(texts, predicates, scores))
             }
             return results_dict
 
@@ -83,30 +87,23 @@ class PredicateDatabase:
                 idx: {
                     "text": self.all_pred_texts[idx],
                     "mapped_predicate": self.all_pred[idx],
-                    "score": float(round(sim, 4))
+                    "score": float(sim)
                 }
                 for idx, sim in zip(indices[0], similarities[0])
             }
 
         similarities = 1 - cdist([embedding.cpu().detach().numpy()], self.all_pred_emb, metric="cosine")
-        count_dist = np.argpartition(similarities, num_results, axis=None)
-        result_similarities = np.sort(similarities[0, count_dist[:num_results]], axis=None)
-        indices = [list(np.asarray(np.where(similarities.flatten() == d)).flatten())
-                   for d in result_similarities]
-        indices = sum(indices, [])
+        similarities = similarities.flatten()
+        top_k = min(num_results, len(similarities))
+        top_indices = np.argsort(-similarities)[:top_k]
         return {
-            idx:
-            {
+            idx: {
                 "text": self.all_pred_texts[idx],
                 "mapped_predicate": self.all_pred[idx],
-                "score": round(similarities[0, idx], 4)
+                "score": float(similarities[idx])
             }
-            for idx in indices[:num_results]
+            for idx in top_indices
         }
-
-
-def temp_transform_embedding(embedding):
-    return [transform_embedding(entry) for entry in embedding]
 
 
 def transform_embedding(embedding):
