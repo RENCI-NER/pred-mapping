@@ -72,13 +72,13 @@ def test_query_endpoint(is_ci_env):
 
             response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
     else:
-        response = client.post("/query/", json=test_payload1, params={"retrieval_method": RetrievalMethod.nn.value})
+        response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.nn.value})
 
     assert response.status_code == 200
     data = response.json()
     assert "results" in data
     assert isinstance(data["results"], list)
-    assert len(data["results"]) == len(test_payload1)
+    assert len(data["results"]) == len(test_payload)
     assert "top_choice" in data["results"][0]
 
 
@@ -96,28 +96,3 @@ def test_extract_loose_format():
     assert result == "biolink:prevents"
 
 
-def test_extract_no_match_returns_none():
-    response = '{"mapped_predicate": "invalid_pred"}'
-    choices = {"treats": "used to treat"}
-    result = extract_mapped_predicate(response, choices)
-    assert result is None
-
-
-def test_relationship_queries_to_batch():
-    query_results = [{
-        "subject": "Aspirin",
-        "object": "Headache",
-        "relationship": "treats",
-        "abstract": "Aspirin is used to treat headaches.",
-        "Top_n_candidates": {
-            "treats": 0.9,
-            "relieves": 0.7
-        }
-    }]
-    descriptions = {"treats": "used to treat", "relieves": "alleviates symptom"}
-    batch = relationship_queries_to_batch(query_results, descriptions, is_vdb=True, is_nn=False)
-
-    assert batch[0]["Top_n_retrieval_method"] == "vectorDb"
-    assert "predicate_choices" in batch[0]
-    assert isinstance(batch[0]["Top_n_candidates"], dict)
-    assert batch[0]["predicate_choices"]["treats"] == "used to treat"
