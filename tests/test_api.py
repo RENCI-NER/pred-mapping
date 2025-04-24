@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from main import app, RetrievalMethod
+from src.biolink_predicate_lookup import extract_mapped_predicate, relationship_queries_to_batch
 
 client = TestClient(app)
 
@@ -44,7 +45,22 @@ def test_query_endpoint(is_ci_env):
                  "Furthermore, betaine (200 and 400 mg/kg) treatment increased the ventricular expression of Bcl-2 and reduced the level of Bax, therefore causing a significant increase in the ratio of Bcl-2/Bax. "
                  "The protective role of betaine on myocardial damage was further confirmed by histopathological examination. In summary, our results showed that betaine pretreatment attenuated isoproterenol-induced acute myocardial ischemia via the regulation of STAT3 and apoptotic pathways."
             )
-          }
+        },
+
+        {
+            "subject": "Cocaine",
+            "object": "Cocaine use disorder",
+            "relationship": "potential target for therapeutics",
+            "abstract": (
+                "Drug-related attentional bias may have significant implications for the treatment of cocaine use disorder (CocUD). However, the neurobiology of attentional bias is not completely understood. "
+                "This study employed dynamic causal modeling (DCM) to conduct an analysis of effective (directional) connectivity involved in drug-related attentional bias in treatment-seeking CocUD subjects. "
+                "The DCM analysis was conducted based on functional magnetic resonance imaging (fMRI) data acquired from fifteen CocUD subjects while performing a cocaine-word Stroop task, during which blocks of Cocaine Words (CW) and Neutral Words (NW) alternated. "
+                "There was no significant attentional bias at group level. Although no significant brain activation was found, the DCM analysis found that, relative to the NW, the CW caused a significant increase in the strength of the right (R) anterior cingulate cortex (ACC) to R hippocampus effective connectivity. "
+                "Greater increase of this connectivity was associated with greater CW reaction time (relative to NW reaction time). The increased strength of R ACC to R hippocampus connectivity may reflect ACC activation of hippocampal memories related to drug use, which was triggered by the drug cues. "
+                "This circuit could be a potential target for therapeutics in CocUD patients. No significant change was found in the other modeled connectivities."
+            )
+        }
+
     ]
 
     if is_ci_env:
@@ -62,7 +78,46 @@ def test_query_endpoint(is_ci_env):
     data = response.json()
     assert "results" in data
     assert isinstance(data["results"], list)
-    assert len(data["results"]) == 1
+    assert len(data["results"]) == len(test_payload1)
     assert "top_choice" in data["results"][0]
 
 
+def test_extract_valid_json_mapping():
+    response = '{"mapped_predicate": "treats"}'
+    choices = {"treats": "used to treat", "prevents": "used to prevent"}
+    result = extract_mapped_predicate(response, choices)
+    assert result == "biolink:treats"
+
+
+def test_extract_loose_format():
+    response = "mapped_predicate: 'prevents'"
+    choices = {"treats": "used to treat", "prevents": "used to prevent"}
+    result = extract_mapped_predicate(response, choices)
+    assert result == "biolink:prevents"
+
+
+def test_extract_no_match_returns_none():
+    response = '{"mapped_predicate": "invalid_pred"}'
+    choices = {"treats": "used to treat"}
+    result = extract_mapped_predicate(response, choices)
+    assert result is None
+
+
+def test_relationship_queries_to_batch():
+    query_results = [{
+        "subject": "Aspirin",
+        "object": "Headache",
+        "relationship": "treats",
+        "abstract": "Aspirin is used to treat headaches.",
+        "Top_n_candidates": {
+            "treats": 0.9,
+            "relieves": 0.7
+        }
+    }]
+    descriptions = {"treats": "used to treat", "relieves": "alleviates symptom"}
+    batch = relationship_queries_to_batch(query_results, descriptions, is_vdb=True, is_nn=False)
+
+    assert batch[0]["Top_n_retrieval_method"] == "vectorDb"
+    assert "predicate_choices" in batch[0]
+    assert isinstance(batch[0]["Top_n_candidates"], dict)
+    assert batch[0]["predicate_choices"]["treats"] == "used to treat"
