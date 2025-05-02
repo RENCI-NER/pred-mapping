@@ -9,8 +9,8 @@ from pydantic import BaseModel, Extra, Field
 from typing import List, Dict, Optional
 from src import biolink_predicate_lookup as blp
 
-app = FastAPI()
-app.add_middleware(
+APP = FastAPI()
+APP.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
@@ -67,13 +67,13 @@ class QueryResponse(BaseModel):
     results: List[PredicateResult]
 
 
+BASE_DIR = Path(__file__)
 BASE_DIR = Path(__file__).resolve().parent
-DESCRIPTION_FILE = BASE_DIR / "data" / "short_description.json"
-EMBEDDING_FILE = BASE_DIR / "data" / "all_biolink_mapped_vectors.json"
-QUALIFIED_PREDICATE_FILE = BASE_DIR / "data" / "qualified_predicate_mapping.json"
+DESCRIPTION_FILE = BASE_DIR.parent / "data" / "short_description.json"
+EMBEDDING_FILE = BASE_DIR.parent / "data" / "all_biolink_mapped_vectors.json"
+QUALIFIED_PREDICATE_FILE = BASE_DIR.parent / "data" / "qualified_predicate_mapping.json"
 
-
-@app.post("/query/",
+@APP.post("/query/",
           summary="Get a standard predicate for a subject-object pair",
           description="Uses a similarity search to determine the top-n biolink predicates for each triple then re-ranks to select the best",
           tags=["Relation Extraction"],

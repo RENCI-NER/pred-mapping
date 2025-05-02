@@ -77,7 +77,8 @@ def test_main():
 
 @pytest.mark.skipif(is_ci_env(), reason="only runs in locally")
 def test_main2():
-    with open("sample_input.json") as f:
+    DIR = os.path.dirname(os.path.abspath(__file__))
+    with open(f"{DIR}/sample_input.json") as f:
         data = json.load(f)
     queries = [d["relationship"] for d in data[:20]]
     print(f"\nTotal Queries: {len(queries)}")

@@ -4,7 +4,7 @@ A two-part pipeline for mapping biomedical relationships (subject, object, conte
 
 ## Overview
 
-The system originally from [LitCoin](https://github.com/ncats/LitCoin/blob/main/predicates/README.md) is split into two stages:
+The system originally by [LitCoin](https://github.com/ncats/LitCoin/blob/main/predicates/README.md) is split into two stages:
 
 1. **Preprocessing Stage** (run infrequently):
    - Collect predicate text and short descriptions `collect_predicate_text.py [-m mappings_file -d short_description]`
@@ -27,7 +27,7 @@ The system originally from [LitCoin](https://github.com/ncats/LitCoin/blob/main/
 
 From the terminal, Start the server: 
 ```bash
-uvicorn main:app --reload 
+uvicorn src.server:APP --reload
 ```
 
 Send a POST request to /query/ with a list of input triples
