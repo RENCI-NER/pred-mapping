@@ -4,8 +4,8 @@ import os
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-from main import app, RetrievalMethod
-client = TestClient(app)
+from src.server import APP, RetrievalMethod
+client = TestClient(APP)
 
 
 @pytest.fixture(scope="session")
