@@ -23,7 +23,7 @@ WORKDIR /repo/pred-mapping
 RUN chmod 777 -R .
 
 # install all required packages
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 RUN pip install uvicorn
 
