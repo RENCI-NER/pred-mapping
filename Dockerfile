@@ -6,6 +6,7 @@ ARG BRANCH_NAME=main
 
 # update the container
 RUN apt-get update
+RUN apt install git
 
 # make a directory for the repo
 RUN mkdir /repo

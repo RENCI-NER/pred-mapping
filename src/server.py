@@ -5,11 +5,19 @@ import logging
 import traceback
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Extra, Field
 from typing import List, Dict, Optional
 from src import biolink_predicate_lookup as blp
 
 APP = FastAPI()
+
+
+@APP.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse("docs")
+
+
 APP.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -72,6 +80,9 @@ BASE_DIR = Path(__file__).resolve().parent
 DESCRIPTION_FILE = BASE_DIR.parent / "data" / "short_description.json"
 EMBEDDING_FILE = BASE_DIR.parent / "data" / "all_biolink_mapped_vectors.json"
 QUALIFIED_PREDICATE_FILE = BASE_DIR.parent / "data" / "qualified_predicate_mapping.json"
+
+
+# "RENCI Relationship Extraction Pipeline"
 
 @APP.post("/query/",
           summary="Get a standard predicate for a subject-object pair",
