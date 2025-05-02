@@ -1,7 +1,10 @@
 .pytest_cache/
 *.DS_Store
+*.pyc
+.git
 .git/
 __pycache__
 .venv/
+.env
 /workspace
 .idea
