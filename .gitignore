@@ -8,3 +8,5 @@
 .idea/
 .venv
 .venv/
+.cache
+/tests/output.json

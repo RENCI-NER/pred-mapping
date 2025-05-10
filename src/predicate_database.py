@@ -107,4 +107,7 @@ class PredicateDatabase:
 
 
 def transform_embedding(embedding):
-    return torch.tensor(embedding, dtype=torch.float32)
+    if isinstance(embedding, torch.Tensor):
+        return embedding.clone().detach().float()
+    else:
+        return torch.tensor(embedding, dtype=torch.float32)

@@ -75,14 +75,18 @@ def test_main():
     print(f"VectorDB: {t:.6f} sec")
 
 
-@pytest.mark.skipif(is_ci_env(), reason="only runs in locally")
+@pytest.mark.skipif(is_ci_env(), reason="only runs locally")
 def test_main2():
-    DIR = os.path.dirname(os.path.abspath(__file__))
-    with open(f"{DIR}/sample_input.json") as f:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sample_input_path = os.path.join(current_dir, "sample_input.json")
+    with open(sample_input_path, "r") as f:
         data = json.load(f)
+
     queries = [d["relationship"] for d in data[:20]]
     print(f"\nTotal Queries: {len(queries)}")
-    benchmark_with_real_data("../data/all_biolink_mapped_vectors.json", queries, mode_name="Similarities")
-    benchmark_with_real_data("../data/all_biolink_mapped_vectors.json", queries, mode_name="NN", is_nn=True)
-    benchmark_with_real_data("../data/all_biolink_mapped_vectors.json", queries, mode_name="VDB", is_vdb=True)
 
+    data_file_path = os.path.join(current_dir, "..", "data", "all_biolink_mapped_vectors.json")
+    # Run benchmarks
+    benchmark_with_real_data(data_file_path, queries, mode_name="Similarities")
+    benchmark_with_real_data(data_file_path, queries, mode_name="NN", is_nn=True)
+    benchmark_with_real_data(data_file_path, queries, mode_name="VDB", is_vdb=True)
