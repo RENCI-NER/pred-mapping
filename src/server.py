@@ -58,6 +58,7 @@ class PredicateChoice(BaseModel):
     predicate: str
     object_aspect_qualifier: Optional[str] = ""
     object_direction_qualifier: Optional[str] = ""
+    negated: bool = False
     selector: str
 
 
@@ -65,10 +66,9 @@ class PredicateResult(BaseModel):
     subject: str
     object: str
     relationship: str
-    abstract: str
     top_choice: PredicateChoice
     Top_n_candidates: Dict[int, Candidate]
-    Top_n_retrieval_method: str  # e.g., "nearest_neighbors"
+    Top_n_retrieval_method: str
 
 
 class QueryResponse(BaseModel):
@@ -93,7 +93,7 @@ QUALIFIED_PREDICATE_FILE = BASE_DIR.parent / "data" / "qualified_predicate_mappi
 async def query_predicate(
         triples: List[HEALpacaInput],
         retrieval_method: RetrievalMethod = Query(
-            default=RetrievalMethod.sim,
+            default=RetrievalMethod.vectordb,
             include_in_schema=False
         )
 ):

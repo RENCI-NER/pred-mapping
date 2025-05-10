@@ -2,6 +2,7 @@
 
 import os
 import pytest
+import json
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from src.server import APP, RetrievalMethod
@@ -39,10 +40,16 @@ def test_query_endpoint(is_ci_env):
 
             response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
     else:
-        response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
+        # DIR = os.path.dirname(os.path.abspath(__file__))
+        # with open(f"{DIR}/sample_input.json") as f:
+        #     test_payload = json.load(f)
+        response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.vectordb.value})
 
     assert response.status_code == 200
     data = response.json()
+    # with open(f"{DIR}/sample_output.json", "w") as f:
+    #     json.dump(data, f, indent=4)
+
     assert "results" in data
     assert isinstance(data["results"], list)
     assert len(data["results"]) == len(test_payload)

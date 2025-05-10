@@ -6,32 +6,32 @@ ARG BRANCH_NAME=main
 
 # update the container
 RUN apt-get update
-RUN apt install git
 
-# make a directory for the repo
+# Create and set working directory
 RUN mkdir /repo
-
-# go to the directory where we are going to upload the repo
 WORKDIR /repo
 
 # get the latest code
 RUN git clone --branch $BRANCH_NAME --single-branch https://github.com/RENCI-NER/pred-mapping.git
 
-# go to the repo dir
+# Set working directory to the cloned repo
 WORKDIR /repo/pred-mapping
 
+## Copy project files into the container
+#COPY ./ /repo
+
+# Ensure permissions
 RUN chmod 777 -R .
 
-# install all required packages
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
-
 RUN pip install uvicorn
 
-# switch to the non-root user (nru). defined in the base image
+# Switch to non-root user
 USER nru
 
-# expose the default port
+# Expose FastAPI port
 EXPOSE 6380
 
-# start the service entry point
+# Start the app
 ENTRYPOINT ["bash", "main.sh"]

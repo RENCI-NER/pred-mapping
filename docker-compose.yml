@@ -1,0 +1,9 @@
+version: "3"
+services:
+  pred-mapping:
+    container_name: pred-mapping
+    image: pred-mapping:v0.1
+    build:
+        context: .
+    ports:
+      - "6380:6380"
