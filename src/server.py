@@ -10,6 +10,16 @@ from pydantic import BaseModel, Extra, Field
 from typing import List, Dict, Optional
 from src import biolink_predicate_lookup as blp
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(name)s | %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+logging.getLogger("linkml_runtime").setLevel(logging.WARNING)
+logging.getLogger("docarray").setLevel(logging.ERROR)
+
+
 APP = FastAPI()
 
 
@@ -108,9 +118,16 @@ async def query_predicate(
         else:
             results = await run_query(input_data, QUALIFIED_PREDICATE_FILE, DESCRIPTION_FILE, EMBEDDING_FILE)
         return {"results": results}
+    except RuntimeError as e:
+        # failed external service call (like 403s)
+        raise HTTPException(
+            status_code=502,
+            detail=f"External service error: {str(e)}"
+        )
     except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        # Generic fallback
+        logger.error("Unhandled exception in query_predicate:\n" + traceback.format_exc())
+        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
 
 
 async def run_query(triple_input: list, qualifiedPredicate_file: str, description_file: str, embedding_file: str,
@@ -118,15 +135,15 @@ async def run_query(triple_input: list, qualifiedPredicate_file: str, descriptio
     llm = blp.PredicateClient()
     with open(embedding_file, "r") as f:
         predicate_embedding = json.load(f)
-    logging.info(f"Initializing the DB with {len(predicate_embedding)} predicate embeddings.... ")
+    logger.info(f"Initializing the DB with {len(predicate_embedding)} predicate embeddings.... ")
     db = blp.PredicateDatabase(client=llm, is_vdb=is_vdb, is_nn=is_nn)
     db.populate_db(predicate_embedding)
 
     data = blp.parse_new_llm_response(triple_input)
-    logging.info(f"Vector Searching {len(triple_input)} Data.... ")
+    logger.info(f"Vector Searching {len(triple_input)} Data.... ")
     relationships = await blp.lookup_unique_predicates(data, db)
 
-    logging.info(f"Reranking and Selecting top predicate choice .... ")
+    logger.info(f"Reranking and Selecting top predicate choice .... ")
     with open(description_file, "r") as f:
         predicate_descriptions = json.load(f)
     with open(qualifiedPredicate_file, "r") as f:

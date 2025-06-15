@@ -1,5 +1,23 @@
 [
   {
+    "abstract": "The ability to scan a large gene rapidly and accurately for all possible heterozygous mutations in large numbers of patient samples will be critical for the future of medicine. We have designed high-density arrays consisting of over 96,600 oligonucleotides 20-nucleotides (nt) in length to screen for a wide range of heterozygous mutations in the 3.45-kilobases (kb) exon 11 of thehereditary breast and ovarian cancer gene BRCA1. Reference and test sample were co-hybridized to these arrays and differences in hybridization patterns quantitated by two-colour analysis. Fourteen of fifteen patient samples with known mutations were accurately diagnosed, and no false positive mutations were identified in 20 control samples. Eight single nucleotide polymorphisms were also readily detected. DNA chip-based assays may provide a valuable new technology for high-throughput cost-efficient detection of genetic alterations.",
+    "subject": "BRCA1",
+    "object": "Mutations",
+    "relationship": "has"
+  },
+  {
+    "abstract": "The ability to scan a large gene rapidly and accurately for all possible heterozygous mutations in large numbers of patient samples will be critical for the future of medicine. We have designed high-density arrays consisting of over 96,600 oligonucleotides 20-nucleotides (nt) in length to screen for a wide range of heterozygous mutations in the 3.45-kilobases (kb) exon 11 of the hereditary breast and ovarian cancer gene BRCA1. Reference and test samples were co-hybridized to these arrays and differences in hybridization patterns quantitated by two-colour analysis. Fourteen of fifteen patient samples with known mutations were accurately diagnosed, and no false positive mutations were identified in 20 control samples. Eight single nucleotide polymorphisms were also readily detected. DNA chip-based assays may provide a valuable new technology for high-throughput cost-efficient detection of genetic alterations.",
+    "subject": "Oligonucleotide arrays",
+    "object": "Mutations",
+    "relationship": "used for detecting"
+  },
+  {
+    "abstract": "Iodide transport defect (ITD) is a rare disorder characterised by an inability of the thyroid to maintain an iodide gradient across the basolateral membrane of thyroid follicular cells, that often results in congenital hypothyroidism. When present the defect is also found in the salivary glands and gastric mucosa and it has been shown to arise from abnormalities of the sodium/iodide symporter (NIS). We describe a woman with hypothyroidism identified at the 3rd month of life. The diagnosis of ITD was suspected because of nodular goitre, and little if any iodide uptake by the thyroid and salivary glands. Treatment with iodide partially corrected the hypothyroidism; however, long-term substitution therapy with L-thyroxine was started. Thyroid radioiodide uptake was only 1.4% and 0.3% at 1 and 24 h after the administration of recombinant human TSH. The saliva to plasma I- ratio was 1.1 indicating that the inability of the thyroid gland to concentrate I- was also present in the salivary glands. Analysis of the patient's NIS gene revealed a 15 nucleotide (nt) deletion of the coding sequence(nt 1314 through nt 1328) and the insertion of 15 nt duplicating the first 15 nt of the adjacent intron. The patient was homozygous for this insertion/deletion, while both consanguineous parents were heterozygous. This deletion predicts the production of a protein lacking the five terminal amino acids of exon XI (439-443) which are located in the 6th intracellular loop. COS-7 cells transfected with a vector expressing the mutant del-(439-443) NIS failed to concentrate iodide, suggesting that the mutation was the direct cause of the ITD in this patient. In conclusion we describe the first Italian case of congenital hypothyroidism due to a new deletion in the NIS gene.",
+    "subject": "Patient",
+    "object": "Iodide",
+    "relationship": "responds to"
+  },
+  {
     "subject": "Hypertension",
     "object": "Brain edema",
     "relationship": "improves",
