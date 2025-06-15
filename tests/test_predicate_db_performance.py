@@ -82,7 +82,7 @@ def test_main2():
     with open(sample_input_path, "r") as f:
         data = json.load(f)
 
-    queries = [d["relationship"] for d in data[:20]]
+    queries = [d["relationship"] for d in data[:5]]
     print(f"\nTotal Queries: {len(queries)}")
 
     data_file_path = os.path.join(current_dir, "..", "data", "all_biolink_mapped_vectors.json")

@@ -40,15 +40,15 @@ def test_query_endpoint(is_ci_env):
 
             response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.sim.value})
     else:
-        DIR = os.path.dirname(os.path.abspath(__file__))
-        with open(f"{DIR}/sample_input.json") as f:
-            test_payload = json.load(f)
+        # DIR = os.path.dirname(os.path.abspath(__file__))
+        # with open(f"{DIR}/sample_input.json") as f:
+        #     test_payload = json.load(f)
         response = client.post("/query/", json=test_payload, params={"retrieval_method": RetrievalMethod.vectordb.value})
 
     assert response.status_code == 200
     data = response.json()
-    with open(f"{DIR}/sample_output.json", "w") as f:
-        json.dump(data, f, indent=4)
+    # with open(f"{DIR}/sample_output.json", "w") as f:
+    #     json.dump(data, f, indent=4)
 
     assert "results" in data
     assert isinstance(data["results"], list)
