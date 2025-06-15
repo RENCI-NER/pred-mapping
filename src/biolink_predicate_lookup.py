@@ -2,19 +2,20 @@ import re
 import json
 import ast
 import asyncio
+import logging
 import requests
 import yaml
 from collections import defaultdict
 from typing import Union
 from src.llm_client import HEALpacaAsyncClient
-import logging
+
 logger = logging.getLogger(__name__)
-logging.getLogger("linkml_runtime").setLevel(logging.WARNING)
-logging.getLogger("docarray").setLevel(logging.ERROR)
+
 from bmt import Toolkit
 from src.predicate_database import PredicateDatabase
 
 t = Toolkit()
+
 
 def get_prompt(subject, object, relationship, abstract, predicate_choices, **kwargs):
     relationship_system_prompt = f"""
@@ -44,27 +45,10 @@ def get_prompt(subject, object, relationship, abstract, predicate_choices, **kwa
     return relationship_system_prompt
 
 
-# def get_prompt(subject, object, relationship, abstract, predicate_choices, **kwargs):
-#     relationship_system_prompt = f"""
-#         given this input:
-#             subject = {subject} ,
-#             object = {object} ,
-#             relationship = {relationship} ,
-#             abstract = {abstract} ,
-#             predicate_choices = {predicate_choices}
-#
-#         For each key in predicate_choices, the corresponding value is the description of the key
-#
-#         Your Task:
-#             Select the most appropriate key from predicate_choices to replace the relationship based on the abstract while maintaining meaning and directionality of the subject and object.
-#
-#         Output: Response strictly ending with a JSON object in this format:
-#         {{"mapped_predicate": "Top one predicate choice"}}
-#
-#         If any of the predicate_choices key is not a good replacement for the relationship, respond with:
-#         {{"mapped_predicate": "none"}}
-#     """
-#     return relationship_system_prompt
+async def limited_task(fn, *args):
+    semaphore = asyncio.Semaphore(10)
+    async with semaphore:
+        return await fn(*args)
 
 
 class PredicateClient(HEALpacaAsyncClient):
@@ -72,42 +56,60 @@ class PredicateClient(HEALpacaAsyncClient):
         super().__init__(**kwargs)
         self.qualified_predicates = None
 
-    async def check_relationship(self, relationships_json: list[dict], qualified_predicates: dict, is_vdb = False, is_nn= False) -> list:
+    async def check_relationship(self, relationships_json: list[dict], qualified_predicates: dict, is_vdb: bool = False, is_nn: bool= False) -> list[dict]:
         """ Send options for a single relationship to LLM """
         self.qualified_predicates = qualified_predicates
         tasks = []
         for relationship_json in relationships_json:
             prompt = get_prompt(**relationship_json)
-            task = asyncio.create_task(self._process_single_relationship(relationship_json, prompt, is_vdb, is_nn))
+            task = asyncio.create_task(limited_task(self._process_single_relationship, relationship_json, prompt, is_vdb, is_nn))
             tasks.append(task)
         return await asyncio.gather(*tasks)
 
     async def _process_single_relationship(self, relationship_json, prompt, is_vdb, is_nn):
-        ai_response = await self.get_chat_completion(prompt)
-        return self._format_relationship_result(relationship_json, ai_response, is_vdb, is_nn)
+        try:
+            llm_response = await self.get_chat_completion(prompt)
+        except Exception as e:
+            logger.error(f"LLM call failed for relationship '{relationship_json.get('relationship')}': {e}")
+            llm_response = None
+        return self._format_relationship_result(relationship_json, llm_response, is_vdb, is_nn)
 
-    def _format_relationship_result( self, relationship_json, ai_response, is_vdb, is_nn ):
-        choices = list(relationship_json.get("predicate_choices").keys())
-        top_choice = extract_mapped_predicate(ai_response, relationship_json.get("predicate_choices"))
-        logger.info(f"""
-        [LLM]: {self.chat_model}
-        [Input]: {relationship_json.get('relationship')}
-        [LLM Raw Response]: {ai_response}
-        [Parsed Predicate]: {top_choice}
-        """)
-        if not top_choice:
-            logger.warning(
-                f"No valid mapping for relationship: {relationship_json.get('relationship')}. Falling back to: {choices[0]}")
-        negated = top_choice.get("negated", False)
-        top_choice = top_choice.get("mapped_predicate", None)
-        predicate = top_choice or f'biolink:{choices[0].replace(" ", "_")}'
+    def _format_relationship_result( self, relationship_json, llm_response, is_vdb, is_nn ):
+        predicate_choices = relationship_json.get("predicate_choices", {})
+        choices = list(predicate_choices.keys())
+        if not choices:
+            logger.warning(f"No predicate candidate(s) found for relationship: {relationship_json.get('relationship')}. Cannot proceed.")
+            relationship_json["top_choice"] = {
+                "predicate": " ",
+                "object_aspect_qualifier": " ",
+                "object_direction_qualifier": " ",
+                "negated": "False",
+                "selector": " "
+            }
+            return relationship_json
+
+        top_choice = extract_mapped_predicate(llm_response, predicate_choices)
+
+        if top_choice is None or top_choice.get("mapped_predicate") is None:
+            # Parsing failure or malformed LLM response
+            logger.warning(f"Malformed LLM response, cannot parse JSON: {llm_response} for relationship: {relationship_json.get('relationship')}. Falling back to: {choices[0]}")
+            predicate = f'biolink:{choices[0].replace(" ", "_")}'
+            negated = "False"
+            selector = "vectorDB" if is_vdb else "nearest_neighbors" if is_nn else "similarities"
+        else:
+            # Parsing when LLM explicitly returned "none" or one of the choices
+            predicate = top_choice.get("mapped_predicate")
+            negated = top_choice.get("negated", "False")
+            selector = self.chat_model
+
+
         predicate, oaq, odq = self.is_qualified(predicate)
         relationship_json["top_choice"] = {
             "predicate": predicate,
             "object_aspect_qualifier": oaq,
             "object_direction_qualifier": odq,
             "negated": negated,
-            "selector":  self.chat_model if top_choice else "vectorDB" if is_vdb else "nearest_neighbors" if is_nn else "similarities"
+            "selector":  selector
         }
         relationship_json.pop("predicate_choices", None)
         return relationship_json
@@ -116,7 +118,6 @@ class PredicateClient(HEALpacaAsyncClient):
         p = self.qualified_predicates.get(predicate, None)
         if p is None:
             return predicate, "", ""
-
         return p.get("predicate", ""), p.get("object_aspect_qualifier", ""), p.get("object_direction_qualifier", "")
 
 
@@ -160,13 +161,13 @@ def relationship_queries_to_batch(query_results: list[dict], descriptions, is_vd
 
 async def lookup_unique_predicates(parsed_data: list[dict], db: PredicateDatabase, output_file: str = None,
                               num_results: int = 10) -> list[dict]:
-    print("Looking up mapped predicates for all relationships")
+    logger.info("Looking up predicates for all relationships...")
 
     tasks = [process_single_edge(edge, db, num_results) for edge in parsed_data]
     updated_data = await asyncio.gather(*tasks)
 
     need_embeddings = sum(["relationship_embedding" in list(edge.keys()) for edge in parsed_data])
-    print(f"Embeddings found: {need_embeddings}. Sending {len(parsed_data) - need_embeddings} relationships to model.")
+    logger.info(f"Embeddings found: {need_embeddings}. Sending {len(parsed_data) - need_embeddings} relationships to embedding model.")
 
     if output_file is not None:
         with open(output_file, "w") as out_file:
@@ -243,6 +244,8 @@ def extract_mapped_predicate(response_text, choices):
     if response_text is None:
         return None
 
+    default = {"mapped_predicate": None, "negated": "False"}
+
     choices_keys = choices.keys()
     cleaned_text = re.sub(r'```(?:json)?\n?', '', response_text.strip()).strip("` \n")
     normalized_choices = {k.lower(): k for k in choices_keys}
@@ -255,9 +258,6 @@ def extract_mapped_predicate(response_text, choices):
         match = re.search(pattern, cleaned_text, re.DOTALL | re.IGNORECASE)
         if match:
             json_candidate = match.group().strip()
-            if 'null' in json_candidate.lower():
-                return {"mapped_predicate": None, "negated": "False"}
-
             try:
                 json_candidate = json_candidate.replace("‘", "'").replace("’", "'").replace('“', '"').replace('”', '"')
                 parsed = json.loads(json_candidate)
@@ -265,118 +265,24 @@ def extract_mapped_predicate(response_text, choices):
                 try:
                     parsed = ast.literal_eval(json_candidate)
                 except Exception as e:
-                    print(f"Fallback literal_eval failed: {e}")
+                    logger.warning(f"Fallback literal_eval failed: {e}")
                     continue
 
             mapped = parsed.get("mapped_predicate")
             negated = parsed.get("negated", "False")
-            if not mapped:
-                return {"mapped_predicate": None, "negated": "False"}
+            if isinstance(mapped, str) and str(mapped).strip().lower() == "none":
+                return {"mapped_predicate": "none", "negated": str(negated).capitalize()}
+
+            if mapped not in choices:
+                return default
+
+            if not mapped or not str(mapped).strip():
+                return default
 
             formatted = _format_if_valid(mapped, normalized_choices, choices)
             return {"mapped_predicate": formatted or None, "negated": str(negated).capitalize()}
 
-    return {"mapped_predicate": None, "negated": "False"}
-
-# def extract_mapped_predicate(response_text, choices):
-#     def find_key_from_value( val, choices ):
-#         try:
-#             val = val.strip().lower()
-#             for key, value in choices.items():
-#                 if isinstance(value, str) and val == value.strip().lower() or val in value.strip().lower():
-#                     return f'biolink:{key.replace(" ", "_")}'
-#         except Exception as e:
-#             print(f" Exception: {e} for {val}")
-#         return None
-#
-#     def _format_if_valid( mapped, normalized_choices, original_choices, allow_raw=False ):
-#         """Helper to validate and format the mapped predicate."""
-#         if not isinstance(mapped, str):
-#             return None  # "none"
-#
-#         mapped_lower = mapped.lower()
-#         if mapped_lower in normalized_choices:
-#             canonical_key = normalized_choices[mapped_lower]
-#             return f'biolink:{canonical_key.replace(" ", "_")}'
-#
-#         # If it's a value match (reverse-lookup)
-#         reverse = find_key_from_value(mapped, original_choices)
-#         if reverse:
-#             return reverse
-#
-#         if allow_raw:
-#             logger.warning(f"Returning fallback raw mapped predicate: '{mapped}'")
-#             return mapped
-#
-#         logger.warning(f"Mapped predicate '{mapped}' not found in choices.")
-#         return None  # "none"
-#
-#     if response_text is None:
-#         return None
-#
-#     choices_keys = choices.keys()
-#     # Normalize and strip known wrapping artifacts
-#     cleaned_text = re.sub(r'```(?:json)?\n?', '', response_text.strip()).strip("` \n")
-#
-#     # Case-insensitive lookup for choice keys
-#     normalized_choices = {k.lower(): k for k in choices_keys}
-#
-#     # === 1. Extract valid JSON/dict-style format ===
-#     json_patterns = [
-#         r'\{[^{}]*["\']mapped_predicate["\']\s*:\s*[^{}]*?\}',  # JSON/dict format
-#     ]
-#
-#     for pattern in json_patterns:
-#         match = re.search(pattern, cleaned_text, re.DOTALL | re.IGNORECASE)
-#         if match:
-#             json_candidate = match.group().strip()
-#             # {mapped_predicate: null}
-#             if 'null' in json_candidate.lower():
-#                 return None#"none"
-#
-#             try:
-#                 json_candidate = json_candidate.replace("‘", "'").replace("’", "'").replace('“', '"').replace('”', '"')
-#                 parsed = json.loads(json_candidate)
-#             except json.JSONDecodeError:
-#                 try:
-#                     parsed = ast.literal_eval(json_candidate)
-#                 except Exception as e:
-#                     logger.warning(f"Fallback literal_eval failed: {e}")
-#                     continue
-#
-#             mapped = parsed.get("mapped_predicate")
-#             if not mapped:
-#                 return None#"none"
-#
-#             return _format_if_valid(mapped, normalized_choices, choices)
-#
-#     # === 2. Fallback: Loose pattern match e.g., mapped_predicate: "treats" ===
-#     loose_match = re.search(
-#         r'["\']?mapped[_ ]predicate["\']?\s*:\s*["\']([^"\'}\n\r]+)["\']?',
-#         cleaned_text,
-#         re.IGNORECASE
-#     )
-#     if loose_match:
-#         mapped = loose_match.group(1).strip()
-#         return _format_if_valid(mapped, normalized_choices, choices)
-#
-#     # === 3. Final fallback: Try natural-language phrasing ===
-#     nl_matches = re.findall(
-#         r'(?:mapped[_ ]predicate[^a-zA-Z0-9]*)?[`\'"]([a-zA-Z0-9_ \-]+)[`\'"]',
-#         cleaned_text,
-#         flags=re.IGNORECASE
-#     )
-#     for match in reversed(nl_matches):
-#         mapped = match.strip()
-#         result = _format_if_valid(mapped, normalized_choices, choices)
-#         if result:
-#             return result
-#
-#     # === 4. Last-resort: match full text to a choice ===
-#     mapped = cleaned_text.strip()
-#     return _format_if_valid(mapped, normalized_choices, choices, allow_raw=True)
-
-
+    return None
 
 
 

@@ -9,3 +9,5 @@ __pycache__
 /workspace
 .idea
 /tests/output.json
+/tests/sample_output.json
+.cache
