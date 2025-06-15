@@ -1,25 +1,43 @@
+import os
 import requests
 import asyncio
 import httpx
+from dotenv import load_dotenv
 from functools import lru_cache
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.ERROR)
+
+load_dotenv()
+
+LLM_API_URL = os.getenv("LLM_API_URL", "https://healpaca.apps.renci.org/api/generate")
+CHAT_MODEL = os.getenv("CHAT_MODEL", "HEALpaca-2.0")
+TEMPERATURE = float(os.getenv("MODEL_TEMPERATURE", 0.5))
+EMBEDDING_URL = os.getenv("EMBEDDING_URL", "https://healpaca.apps.renci.org/api/embeddings")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+headers = {"Content-Type": "application/json"}
+
+
+def make_payload(model: str, prompt: str, temperature: float) -> dict:
+    return {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "temperature": temperature
+    }
 
 
 @lru_cache(maxsize=2048)
-def _cached_embedding_request( text: str ) -> list:
-    import requests
-    request = {
-        "model": "nomic-embed-text",
-        "prompt": text,
-        "stream": False,
-        "temperature": 0.5
-    }
-    headers = {"Content-Type": "application/json"}
-    response = requests.post("https://healpaca.apps.renci.org/api/embeddings", json=request, headers=headers)
-
-    if response.status_code == 200:
-        return response.json()["embedding"]
-    else:
-        print(Exception(f"Error Code: {response.status_code}"))
+def _cached_embedding_request( text: str ) -> list[float] | None:
+    request = make_payload(EMBEDDING_MODEL, text, TEMPERATURE)
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(EMBEDDING_URL, json=request, headers=headers)
+            response.raise_for_status()
+            return response.json().get("embedding")
+    except httpx.HTTPError as e:
+        logger.error(f"Cached embedding request failed: {e}")
         return None
 
 
@@ -28,7 +46,7 @@ class LLMClient:
             self,
             embedding_model: str = None,
             chat_model: str = None,
-            chat_temperature: float = 0.5
+            chat_temperature: float = TEMPERATURE
     ):
         self.embedding_model = embedding_model
         self.chat_model = chat_model
@@ -36,112 +54,101 @@ class LLMClient:
 
     def embedding_request( self, text: str ):
         """ Create an API embedding request for input text. """
-        request_content = {
-            "model": self.embedding_model,
-            "prompt": text,
-            "stream": False,
-            "temperature": self.chat_temperature,
-        }
+        request_content = make_payload(self.embedding_model, text, self.chat_temperature)
         return request_content
 
     def chat_request( self, prompt: str ):
         """ Create an API chat request from system and user prompts. """
-        request_content = {
-            "model": self.chat_model,
-            "prompt": prompt,
-            "stream": False,
-            "temperature": self.chat_temperature
-        }
+        request_content = make_payload(self.chat_model, prompt, self.chat_temperature)
         return request_content
 
 
 class HEALpacaClient(LLMClient):
     def __init__(
             self,
-            chat_model: str = "HEALpaca-2.0", #"llama3.1:latest"
-            embedding_model: str = "nomic-embed-text",
-            api_url: str = "https://healpaca.apps.renci.org/api/generate",
-            #"https://ollama.apps.renci.org/api/generate",
-            embedding_url: str = "https://healpaca.apps.renci.org/api/embeddings",
-            chat_temperature: float = 0.5,
+            chat_model: str = CHAT_MODEL,
+            embedding_model: str = EMBEDDING_MODEL,
+            api_url: str = LLM_API_URL,
+            embedding_url: str = EMBEDDING_URL,
+            chat_temperature: float = TEMPERATURE,
     ):
         super().__init__(chat_model=chat_model, embedding_model=embedding_model, chat_temperature=chat_temperature)
         self.api_url = api_url
         self.embedding_url = embedding_url
 
-
-    def get_embedding(self, text: str) -> list:
+    def get_embedding(self, text: str) -> list[float] | None:
         return _cached_embedding_request(text)
-
-    async def get_async_embedding(self, texts: list) -> list:
-        tasks = [asyncio.create_task(self.get_embedding(text)) for text in texts]
-        return await asyncio.gather(*tasks)
 
     def get_chat_completion(self, prompt: str):
         """ Get single chat response """
         request = self.chat_request(prompt)
-        headers = {"Content-Type": "application/json"}
-        response = requests.post(self.api_url, json=request, headers=headers)
-        if response.status_code == 200:
-            try:
-                data = response.json().get("response", "")
-                return data
-            except Exception as e:
-                print(f"Error Code: {response.status_code}")
-                return response
-        else:
-            print(f"Exception Error {response.status_code}")
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(self.api_url, json=request, headers=headers)
+                response.raise_for_status()
+                return response.json().get("response", "")
+        except httpx.HTTPError as e:
+            logger.error(f"Chat Completion request failed: {e}")
             return None
 
-    async def get_async_chat_completion(self, prompts: list):
-        task = [asyncio.create_task(self.get_chat_completion(prompt)) for prompt in prompts]
-        return await asyncio.gather(*task)
+    # async def get_async_embedding(self, texts: list[str]) -> list[list[float] | None]:
+    #     tasks = [asyncio.create_task(self.get_embedding(text)) for text in texts]
+    #     return await asyncio.gather(*tasks)
+    #
+    # async def get_async_chat_completion(self, prompts: list[str]) -> list[str | None]:
+    #     tasks = [asyncio.create_task(self.get_chat_completion(prompt)) for prompt in prompts]
+    #     return await asyncio.gather(*tasks)
 
 
 class HEALpacaAsyncClient:
     def __init__(
         self,
-        chat_model="HEALpaca-2.0",
-        embedding_model="nomic-embed-text",
-        api_url="https://healpaca.apps.renci.org/api/generate",
-        embedding_url="https://healpaca.apps.renci.org/api/embeddings",
-        chat_temperature=0.5,
+        chat_model=CHAT_MODEL,
+        embedding_model=EMBEDDING_MODEL,
+        api_url=LLM_API_URL,
+        embedding_url=EMBEDDING_URL,
+        chat_temperature=TEMPERATURE,
     ):
         self.chat_model = chat_model
         self.embedding_model = embedding_model
         self.api_url = api_url
         self.embedding_url = embedding_url
         self.chat_temperature = chat_temperature
-        self.headers = {"Content-Type": "application/json"}
+        self.headers = headers
 
     async def _post(self, url: str, model: str, prompt: str) -> str:
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(
                     url,
-                    json={
-                        "model": model,
-                        "prompt": prompt,
-                        "stream": False,
-                        "temperature": self.chat_temperature,
-                    },
+                    json=make_payload(model, prompt, self.chat_temperature),
                     headers=self.headers,
                 )
                 response.raise_for_status()
                 data = response.json()
                 return data.get("embedding") or data.get("response")
-            except Exception as e:
-                print(f"Request failed to {url}: {e}")
+            except httpx.HTTPStatusError as e:
+                status_code = e.response.status_code
+                logger.error(f"[HTTP ERROR] {url} returned status {status_code}")
+                raise RuntimeError(f"HTTP {status_code} error calling {url}")
                 return None
 
-    async def get_embedding(self, text: str):
+            except httpx.RequestError as e:
+                logger.error(f"[REQUEST ERROR] Could not reach {url} for model '{model}': {str(e)}")
+                return None
+
+            except Exception as e:
+                logger.exception(f"[UNEXPECTED ERROR] calling {url} with model '{model}': {str(e)}")
+                return None
+
+    async def get_embedding(self, text: str) -> list[float] | None:
         return await self._post(self.embedding_url, self.embedding_model, text)
 
-    async def get_chat_completion(self, prompt: str):
+    async def get_chat_completion(self, prompt: str) :
         return await self._post(self.api_url, self.chat_model, prompt)
 
-    async def get_async_embeddings(self, texts: list[str]):
+    async def get_async_embeddings(self, texts: list[str]) -> list[list[float] | None]:
         return await asyncio.gather(*(self.get_embedding(text) for text in texts))
 
-    async def get_async_chat_completions(self, prompts: list[str]):
+    async def get_async_chat_completions(self, prompts: list[str]) -> list[str | None]:
         return await asyncio.gather(*(self.get_chat_completion(prompt) for prompt in prompts))
