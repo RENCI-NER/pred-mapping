@@ -40,6 +40,7 @@ A. Starting the server:
             EMBEDDING_MODEL=nomic-embed-text
         ```
         Any other model deployed as a service
+        The expected embedding dimension is `768`
     
   5. From the terminal, start the server by running: 
      ```bash

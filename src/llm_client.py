@@ -131,15 +131,14 @@ class HEALpacaAsyncClient:
                 status_code = e.response.status_code
                 logger.error(f"[HTTP ERROR] {url} returned status {status_code}")
                 raise RuntimeError(f"HTTP {status_code} error calling {url}")
-                return None
 
             except httpx.RequestError as e:
                 logger.error(f"[REQUEST ERROR] Could not reach {url} for model '{model}': {str(e)}")
-                return None
+                raise RuntimeError(f"Request error reaching {url} for model '{model}': {str(e)}")
 
             except Exception as e:
-                logger.exception(f"[UNEXPECTED ERROR] calling {url} with model '{model}': {str(e)}")
-                return None
+                raise RuntimeError(f"[UNEXPECTED ERROR] calling {url} with model '{model}': {str(e)}")
+                logger.exception(f"Unexpected error calling {url}: {str(e)}")
 
     async def get_embedding(self, text: str) -> list[float] | None:
         return await self._post(self.embedding_url, self.embedding_model, text)
