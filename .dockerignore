@@ -11,3 +11,5 @@ __pycache__
 /tests/output.json
 /tests/sample_output.json
 .cache
+__pycache__/
+*.pyo
