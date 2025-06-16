@@ -4,7 +4,7 @@ from pathlib import Path
 import logging
 import traceback
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
+# from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Extra, Field
 from typing import List, Dict, Optional
@@ -28,13 +28,10 @@ def root():
     return RedirectResponse("docs")
 
 
-APP.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# APP.add_middleware(
+#     CORSMiddleware,
+#     allow_credentials=True,
+# )
 
 
 class HEALpacaInput(BaseModel):
@@ -133,11 +130,8 @@ async def query_predicate(
 async def run_query(triple_input: list, qualifiedPredicate_file: str, description_file: str, embedding_file: str,
                      is_vdb=False, is_nn=False):
     llm = blp.PredicateClient()
-    with open(embedding_file, "r") as f:
-        predicate_embedding = json.load(f)
-    logger.info(f"Initializing the DB with {len(predicate_embedding)} predicate embeddings.... ")
     db = blp.PredicateDatabase(client=llm, is_vdb=is_vdb, is_nn=is_nn)
-    db.populate_db(predicate_embedding)
+    db.load_db_from_json(embedding_file)
 
     data = blp.parse_new_llm_response(triple_input)
     logger.info(f"Vector Searching {len(triple_input)} Data.... ")

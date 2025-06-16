@@ -18,7 +18,7 @@
       clean_mappings.py [-m mappings_file -n negations_file -a all_mappings_file]
     ```
  Takes in mapping file and negations file, removes any LLM "not enough information" responses or empty strings, and merges into `all_mappings_file`. **If you try to merge a newly generated mapping file with the existing negations file in the Drive, this will break.** The `TextCollector` was updated and returns fewer bad descriptors, but the negations weren't regenerated to reduce spending. The old mappings file is in the Drive, so this step can be tested using that, or negations can be regenerated.
-- Embed the cleaned predicates/descriptors and saved for API use 
+- Embed the cleaned predicates/descriptors and saved for API use. The embedding dimension for the model used is `768`
     ```bash
       embed_biolink_mappings.py [-m mappings_file -e embeddings_file --lowercase]
     ```
