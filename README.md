@@ -39,44 +39,38 @@ A. Starting the server:
             EMBEDDING_URL=https://healpaca.apps.renci.org/api/embeddings
             EMBEDDING_MODEL=nomic-embed-text
         ```
-        These models are also available as a service: 
-        ```bash
-            LLM_API_URL=https://ollama.apps.renci.org/api/generate
-            CHAT_MODEL=llama3.1:latest
-        ```
+        Any other model deployed as a service
+    
   5. From the terminal, start the server by running: 
      ```bash
         uvicorn src.server:APP --reload
      ```
 
-- Dockerizing the Pipeline on MacBook:
+  - Dockerizing the Pipeline on MacBook:
   1. To create the docker image, run:
      ```bash
         docker buildx build --platform linux/amd64,linux/arm64 -t <image-name>:<tag> --push .
      ```
-  2. Once the build is complete, run: 
-     ```bash
-        docker run --rm \
-          --platform linux/amd64 \
-          -p 6380:6380 \
-          -e HOME=/tmp \
-          -e JINA_HOME=/tmp/.jina \
-          -v $(pwd)/.cache:/tmp/.cache \
-          <image-name>:<tag>
-     ```
-     Note: 
-        1. Replace the <image-name>:<tag> with your desired name/tag eg: predmapping:v1
-        2. Make sure .cache exists and is writable:
-                ```
-                    mkdir -p .cache
-                ```
-                ```
-                   chmod 777 .cache
-                ```
+  2. Once the build is complete, run:
+  ```bash
+     docker run --rm \
+     --platform linux/amd64 \
+     -p 6381:6380 \
+     -e HOME=/tmp \
+     -e JINA_HOME=/tmp/.jina \
+     -e LLM_API_URL=HERE \
+     -e CHAT_MODEL=HERE \
+     -e EMBEDDING_URL=HERE \
+     -e EMBEDDING_MODEL=HERE \
+     -v $(pwd)/.cache:/tmp/.cache \
+     <image-name>:<tag>
+  ```
+    Note: 
+        1. Replace the <image-name>:<tag> with your desired name/tag eg: predmapping:v1.0
 
-B. From the swagger UI: 
+B. From the swagger UI at ``` http://0.0.0.0:6380``: 
 
-- Send a POST request to ```/query/``` with a list of input triples
+- Make a POST request to ```/query/``` with a list of input triples
     ```bash
        [
          {

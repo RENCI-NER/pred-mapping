@@ -2,7 +2,7 @@
 FROM ghcr.io/translatorsri/renci-python-image:3.12.4
 
 #Build from this branch.  Assume master for this repo
-ARG BRANCH_NAME=main
+ARG BRANCH_NAME=pipeline-refactor
 
 # update the container
 RUN apt-get update
@@ -12,12 +12,13 @@ RUN mkdir /repo
 WORKDIR /repo
 
 # get the latest code
+ARG BRANCH_NAME
 RUN git clone --branch $BRANCH_NAME --single-branch https://github.com/RENCI-NER/pred-mapping.git
 
 # Set working directory to the cloned repo
 WORKDIR /repo/pred-mapping
 
-## Copy project files into the container
+# Copy project files into the container
 #COPY ./ /repo
 
 # Ensure permissions
