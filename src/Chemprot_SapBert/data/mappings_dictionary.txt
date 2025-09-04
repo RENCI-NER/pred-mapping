@@ -1,0 +1,77 @@
+agonist_NEG||a chemical substance that does not bind to and activate certain receptors on cells, causing a biological response
+agonist_NEG||a chemical that does not activate a receptor to produce a biological response
+agonist_NEG||a drug which under some conditions does not behave as an agonist while under other conditions
+agonist_NEG||a substance that does not fully activate the receptor that it binds to, typically referring to compounds that do not both bind to receptors and enhance their activity
+agonist_NEG||agonist NEG
+agonist_NEG||not agonist activator
+agonist||a chemical substance that binds to and activates certain receptors on cells, causing a biological response
+agonist||a chemical that activates a receptor to produce a biological response
+agonist||a drug which under some conditions behaves as an agonist while under other conditions
+agonist||a substance that fully activates the receptor that it binds to, typically referring to compounds that both bind to receptors and enhance their activity
+agonist||agonist
+agonist||agonist activator
+antagonist_NEG||antagonist NEG
+antagonist_NEG||chemical substance that does not bind to and block the activation of certain receptors on cells, preventing a biological response
+antagonist_NEG||do not have affinity but no efficacy for their cognate receptors, and binding will not disrupt the interaction and inhibit the function of an agonist
+antagonist||antagonist
+antagonist||chemical substance that binds to and blocks the activation of certain receptors on cells, preventing a biological response
+antagonist||have affinity but no efficacy for their cognate receptors, and binding will disrupt the interaction and inhibit the function of an agonist
+cofactor_NEG||a non-protein chemical compound that is not required for an enzyme's biological activity
+cofactor_NEG||cofactor NEG
+cofactor_NEG||may not be organic molecules (coenzymes) or inorganic ions
+cofactor||a non-protein chemical compound that is required for an enzyme's biological activity
+cofactor||cofactor
+cofactor||may be organic molecules (coenzymes) or inorganic ions
+downregulator_NEG||Usually not associated with downregulation and words such as 'inhibitor', 'block' and 'decrease activity of'
+downregulator_NEG||compound that does not decrease the expression, production, or activity of genes, proteins, or biological pathways
+downregulator_NEG||downregulator NEG
+downregulator_NEG||not an indirect downregulator
+downregulator_NEG||substance that does not decrease or does not prevent the activity of an enzyme, receptor, or biological process
+downregulator||Usually associated with downregulation and words such as 'inhibitor', 'block' and 'decrease activity of'
+downregulator||compound that decreases the expression, production, or activity of genes, proteins, or biological pathways
+downregulator||downregulator
+downregulator||indirect downregulator
+downregulator||substance that decreases or prevents the activity of an enzyme, receptor, or biological process
+modulator_NEG||does not bind to and activate a receptor but is only able to elicit partial efficacy at that receptor or does not bind to a receptor at a site distinct from the active site and induce a conformational change in the receptor, which alters the affinity of the receptor for the endogenous ligand
+modulator_NEG||modulator NEG
+modulator_NEG||modulator does not activator
+modulator||binds to and activates a receptor but is only able to elicit partial efficacy at that receptor or binds to a receptor at a site distinct from the active site and induces a conformational change in the receptor, which alters the affinity of the receptor for the endogenous ligand
+modulator||modulator
+modulator||modulator activator
+part_of_NEG||does not indicate that the chemical is a structural component or subunit of the protein complex
+part_of_NEG||is not part of
+part_of_NEG||part of NEG
+part_of||indicates that the chemical is a structural component or subunit of the protein complex
+part_of||part of
+regulator_NEG||a general term for compounds that do not control or influence the activity, expression, or function of proteins or biological processes, encompassing both positive and negative regulation
+regulator_NEG||not a direct regulator
+regulator_NEG||not an indirect regulator
+regulator_NEG||regulator NEG
+regulator||a general term for compounds that control or influence the activity, expression, or function of proteins or biological processes, encompassing both positive and negative regulation
+regulator||direct regulator
+regulator||indirect regulator
+regulator||regulator
+substrate_NEG||a bidirectional relationship where a chemical does not serve as both substrate and product in metabolic processes involving the protein
+substrate_NEG||is not a product of
+substrate_NEG||is not a substrate product of
+substrate_NEG||not related to substrate metabolic relation
+substrate_NEG||substrate NEG
+substrate_NEG||the end result molecule is not produced from an enzymatic reaction where the chemical is the product of the protein's (enzyme's) activity
+substrate_NEG||the molecule upon which an enzyme does not act; the starting material in an enzymatic reaction that does not get converted to a product
+substrate||a bidirectional relationship where a chemical can serve as both substrate and product in metabolic processes involving the protein
+substrate||product of
+substrate||related to substrate metabolic relation
+substrate||substrate
+substrate||substrate product of
+substrate||the end result molecule produced from an enzymatic reaction where the chemical is the product of the protein's (enzyme's) activity
+substrate||the molecule upon which an enzyme acts; the starting material in an enzymatic reaction that gets converted to a product
+upregulator_NEG||Usually not related to upregulation and words such as 'activate', 'promote' and 'increase activity of'
+upregulator_NEG||a compound that does not increase the expression, production, or activity of genes, proteins, or biological pathways
+upregulator_NEG||compound that does not increase the activity, expression, or function of a protein or biological pathway
+upregulator_NEG||not an indirect upregulator
+upregulator_NEG||upregulator NEG
+upregulator||Usually related to upregulation and words such as 'activate', 'promote' and 'increase activity of'
+upregulator||a compound that increases the expression, production, or activity of genes, proteins, or biological pathways
+upregulator||compound that increases the activity, expression, or function of a protein or biological pathway
+upregulator||indirect upregulator
+upregulator||upregulator

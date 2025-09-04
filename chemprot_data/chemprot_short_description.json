@@ -1,0 +1,11 @@
+{
+  "agonist": "a substance that fully activates the receptor that it binds to, typically referring to compounds that both bind to receptors and enhance their activity",
+  "part of": "indicates that the chemical is a structural component or subunit of the protein complex",
+  "regulator": "a general term for compounds that control or influence the activity, expression, or function of proteins or biological processes, encompassing both positive and negative regulation",
+  "upregulator": "compound that increases the activity, expression, or function of a protein or biological pathway",
+  "downregulator": "compound that decreases the expression, production, or activity of genes, proteins, or biological pathways",
+  "antagonist": "have affinity but no efficacy for their cognate receptors, and binding will disrupt the interaction and inhibit the function of an agonist",
+  "modulator": "binds to and activates a receptor but is only able to elicit partial efficacy at that receptor or binds to a receptor at a site distinct from the active site and induces a conformational change in the receptor, which alters the affinity of the receptor for the endogenous ligand",
+  "substrate": "a bidirectional relationship where a chemical can serve as both substrate and product in metabolic processes involving the protein",
+  "cofactor": "may be organic molecules (coenzymes) or inorganic ions"
+}
