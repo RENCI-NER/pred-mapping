@@ -6,11 +6,13 @@ import logging
 import numpy as np
 from tqdm import tqdm
 from typing import Union, Optional
+from pydantic import BaseModel
 from difflib import get_close_matches
 from src.llm_client import HEALpacaAsyncClient
 from bmt import Toolkit
 from src.utils import chunked, safe_limited_chat_completion, safe_limited_embedding
 from src.predicate_database import PredicateDatabase
+
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,11 @@ ontology_predicate_labels = None
 ontology_predicate_embeddings = None
 sapbert_predict = None
 sapbert_score_batch = None
+
+
+class PredicateMapping(BaseModel):
+    mapped_predicate: str
+    negated: str = "False"
 
 
 def load_sapbert_data():
@@ -302,99 +309,132 @@ def format_result( edges: list[dict], search_results: dict, sapbert_results: dic
     return edges
 
 
-def extract_mapped_predicate( response_text, choices ):
-    def find_key_from_value( val, options ):
-        try:
-            for key, value in options.items():
-                if val.lower() == value.lower() or val.lower() in value.lower():
-                    return f'{key.strip()}'
-        except Exception as e:
-            logger.warning(f"Exception: {e} for {val}")
-            return None
-
-    def _validate_negated( negated_value ):
-        """Validate and normalize negated field to boolean string"""
-        if isinstance(negated_value, bool):
-            return str(negated_value)
-        elif isinstance(negated_value, str):
-            negated_lower = negated_value.strip().lower()
-            if negated_lower in ['true', 'yes', '1']:
-                return "True"
-            elif negated_lower in ['false', 'no', '0']:
-                return "False"
-            else:
-                logger.warning(f"Invalid negated value: '{negated_value}', defaulting to False")
-                return "False"
-        else:
-            logger.warning(f"Unexpected negated type: {type(negated_value)}, defaulting to False")
-            return "False"
-
-    def _format_if_valid( mapped_pred, normalized_options, allow_raw=False ):
-        if mapped_pred in normalized_options:
-            return f'{mapped_pred.strip()}'
-
-        reverse = find_key_from_value(mapped_pred, normalized_options)
-        if reverse:
-            return reverse
-
-        match_pred = get_close_matches(mapped_pred, normalized_options.keys(), n=1)
-        if match_pred:
-            return f'{match_pred[0].strip()}'
-
-        if allow_raw:
-            return mapped_pred
-
-        return None
-
-    default = {"mapped_predicate": None, "negated": "False"}
+def extract_mapped_predicate(response_text, choices):
+    """Extract JSON from LLM response using Pydantic parsing"""
 
     if not response_text or isinstance(response_text, Exception):
-        logger.warning(f"[extract_mapped_predicate] No response or exception: {response_text}")
-        return default
+        logger.error(f"No response or exception: {response_text}")
+        return None
 
-    cleaned_text = re.sub(r'```(?:json)?\n?', '', response_text.strip()).strip("` \n")
-    json_patterns = [
-        # Complete JSON with both fields?
-        r'\{\s*["\']mapped_predicate["\']\s*:\s*["\'][^"\']*["\']\s*,\s*["\']negated["\']\s*:\s*["\'][^"\']*["\']\s*\}',
-        # JSON with mapped_predicate only?
-        r'\{\s*["\']mapped_predicate["\']\s*:\s*["\'][^"\']*["\']\s*\}',
-        # Fallback: any JSON-like structure with mapped_predicate?
-        r'\{[^{}]*["\']mapped_predicate["\']\s*:\s*[^{}]*?\}',
-    ]
+    try:
+        # JSON in the response
+        start = response_text.find('{')
+        end = response_text.rfind('}') + 1
 
-    for pattern in json_patterns:
-        match = re.search(pattern, cleaned_text, re.DOTALL | re.IGNORECASE)
-        if match:
-            json_candidate = match.group().strip()
-            try:
-                # Clean up common quote issues
-                json_candidate = json_candidate.replace('"', '"').replace('"', '"')
-                json_candidate = json_candidate.replace(''', "'").replace(''', "'")
-                parsed = json.loads(json_candidate)
-            except json.JSONDecodeError:
-                try:
-                    parsed = ast.literal_eval(json_candidate)
-                except Exception as e:
-                    logger.warning(f"JSON parsing failed for: {json_candidate[:100]}... Error: {e}")
-                    continue
+        if start == -1 or end == 0:
+            logger.error("No JSON found in response")
+            return None
 
-            if not isinstance(parsed, dict) or 'mapped_predicate' not in parsed:
-                logger.warning(f"Invalid parsed structure: {parsed}")
-                continue
+        json_str = response_text[start:end]
+        data = json.loads(json_str)
 
-            mapped = parsed.get("mapped_predicate", "").strip().lower()
-            negated_raw = parsed.get("negated", "False")
-            negated = _validate_negated(negated_raw)
+        parsed = PredicateMapping(**data)
+        return {
+            "mapped_predicate": parsed.mapped_predicate,
+            "negated": parsed.negated
+        }
 
-            if mapped == "none":
-                return {"mapped_predicate": "none", "negated": negated}
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error(f"Failed to parse JSON: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return None
 
-            normalized_choices = {k.strip().lower(): v.strip().lower() for k, v in choices.items()}
-            formatted = _format_if_valid(mapped, normalized_choices)
-            if not formatted:
-                logger.warning(
-                    f"[extract_mapped_predicate] Failed to map: '{mapped}' from response:\n{response_text}\n")
-            return {"mapped_predicate": formatted or None, "negated": negated}
-
-    logger.warning(f"[extract_mapped_predicate] No valid JSON structure found in:\n{response_text}\n")
-    return default
+#
+# def extract_mapped_predicate(response_text, choices):
+#     def find_key_from_value( val, options ):
+#         try:
+#             for key, value in options.items():
+#                 if val.lower() == value.lower() or val.lower() in value.lower():
+#                     return f'{key.strip()}'
+#         except Exception as e:
+#             logger.warning(f"Exception: {e} for {val}")
+#             return None
+#
+#     def _validate_negated( negated_value ):
+#         """Validate and normalize negated field to boolean string"""
+#         if isinstance(negated_value, bool):
+#             return str(negated_value)
+#         elif isinstance(negated_value, str):
+#             negated_lower = negated_value.strip().lower()
+#             if negated_lower in ['true', 'yes', '1']:
+#                 return "True"
+#             elif negated_lower in ['false', 'no', '0']:
+#                 return "False"
+#             else:
+#                 logger.warning(f"Invalid negated value: '{negated_value}', defaulting to False")
+#                 return "False"
+#         else:
+#             logger.warning(f"Unexpected negated type: {type(negated_value)}, defaulting to False")
+#             return "False"
+#
+#     def _format_if_valid( mapped_pred, normalized_options, allow_raw=False ):
+#         if mapped_pred in normalized_options:
+#             return f'{mapped_pred.strip()}'
+#
+#         reverse = find_key_from_value(mapped_pred, normalized_options)
+#         if reverse:
+#             return reverse
+#
+#         match_pred = get_close_matches(mapped_pred, normalized_options.keys(), n=1)
+#         if match_pred:
+#             return f'{match_pred[0].strip()}'
+#
+#         if allow_raw:
+#             return mapped_pred
+#
+#         return None
+#
+#     default = {"mapped_predicate": None, "negated": "False"}
+#
+#     if not response_text or isinstance(response_text, Exception):
+#         logger.warning(f"[extract_mapped_predicate] No response or exception: {response_text}")
+#         return default
+#
+#     cleaned_text = re.sub(r'```(?:json)?\n?', '', response_text.strip()).strip("` \n")
+#     json_patterns = [
+#         # Complete JSON with both fields?
+#         r'\{\s*["\']mapped_predicate["\']\s*:\s*["\'][^"\']*["\']\s*,\s*["\']negated["\']\s*:\s*["\'][^"\']*["\']\s*\}',
+#         # JSON with mapped_predicate only?
+#         r'\{\s*["\']mapped_predicate["\']\s*:\s*["\'][^"\']*["\']\s*\}',
+#         # Fallback: any JSON-like structure with mapped_predicate?
+#         r'\{[^{}]*["\']mapped_predicate["\']\s*:\s*[^{}]*?\}',
+#     ]
+#
+#     for pattern in json_patterns:
+#         match = re.search(pattern, cleaned_text, re.DOTALL | re.IGNORECASE)
+#         if match:
+#             json_candidate = match.group().strip()
+#             try:
+#                 # Clean up common quote issues
+#                 json_candidate = json_candidate.replace('"', '"').replace('"', '"')
+#                 json_candidate = json_candidate.replace(''', "'").replace(''', "'")
+#                 parsed = json.loads(json_candidate)
+#             except json.JSONDecodeError:
+#                 try:
+#                     parsed = ast.literal_eval(json_candidate)
+#                 except Exception as e:
+#                     logger.warning(f"JSON parsing failed for: {json_candidate[:100]}... Error: {e}")
+#                     continue
+#
+#             if not isinstance(parsed, dict) or 'mapped_predicate' not in parsed:
+#                 logger.warning(f"Invalid parsed structure: {parsed}")
+#                 continue
+#
+#             mapped = parsed.get("mapped_predicate", "").strip().lower()
+#             negated_raw = parsed.get("negated", "False")
+#             negated = _validate_negated(negated_raw)
+#
+#             if mapped == "none":
+#                 return {"mapped_predicate": "none", "negated": negated}
+#
+#             normalized_choices = {k.strip().lower(): v.strip().lower() for k, v in choices.items()}
+#             formatted = _format_if_valid(mapped, normalized_choices)
+#             if not formatted:
+#                 logger.warning(
+#                     f"[extract_mapped_predicate] Failed to map: '{mapped}' from response:\n{response_text}\n")
+#             return {"mapped_predicate": formatted or None, "negated": negated}
+#
+#     logger.warning(f"[extract_mapped_predicate] No valid JSON structure found in:\n{response_text}\n")
+#     return default

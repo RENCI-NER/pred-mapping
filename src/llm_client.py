@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.ERROR)
 load_dotenv()
 
 LLM_API_URL = os.getenv("LLM_API_URL", "http://localhost:11434/api/generate")
-CHAT_MODEL = os.getenv("CHAT_MODEL", "alibayram/medgemma:27b")
+CHAT_MODEL = os.getenv("CHAT_MODEL", "alibayram/medgemma:latest")
 TEMPERATURE = float(os.getenv("MODEL_TEMPERATURE", 0.5))
 EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://localhost:11434/api/embeddings")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
