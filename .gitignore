@@ -10,3 +10,8 @@
 .venv/
 .cache
 /tests/output.json
+/tests/outputs/
+/src/Chemprot_SapBert/model/model.safetensors
+/chemprot_data/all_chemprot_mapped_vectors1024.json
+
+

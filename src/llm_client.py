@@ -15,10 +15,10 @@ logging.basicConfig(level=logging.ERROR)
 load_dotenv()
 
 LLM_API_URL = os.getenv("LLM_API_URL", "http://localhost:11434/api/generate")
-CHAT_MODEL = os.getenv("CHAT_MODEL", "alibayram/medgemma:latest")
+CHAT_MODEL = os.getenv("CHAT_MODEL", "alibayram/medgemma:latest") #"alibayram/medgemma:27B"
 TEMPERATURE = float(os.getenv("MODEL_TEMPERATURE", 0.5))
 EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://localhost:11434/api/embeddings")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text") #bge-m3:latest
 headers = {"Content-Type": "application/json"}
 USE_LOCAL = os.getenv("USE_LOCAL", "true").lower() == "true"
 

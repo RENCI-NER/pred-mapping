@@ -270,7 +270,7 @@ async def lookup_unique_predicates(parsed_data: list[dict], db: PredicateDatabas
     return updated_data
 
 
-def format_result( edges: list[dict], search_results: dict, sapbert_results: dict = None ) -> list[dict]:
+def format_result(edges: list[dict], search_results: dict, sapbert_results: dict = None) -> list[dict]:
     if sapbert_results is None:
         sapbert_results = {}
 
@@ -290,13 +290,14 @@ def format_result( edges: list[dict], search_results: dict, sapbert_results: dic
                 if pred not in unique_predicates or score > unique_predicates[pred]:
                     unique_predicates[pred] = score
 
-            for predicate in list(unique_predicates):
-                try:
-                    inverse = t.get_element(predicate).inverse
-                    if inverse and inverse not in unique_predicates:
-                        unique_predicates[inverse] = unique_predicates[predicate]
-                except AttributeError:
-                    continue
+            if 'biolink' in pred: # Will look for better way to make this only run for biolink set up
+                for predicate in list(unique_predicates):
+                    try:
+                        inverse = t.get_element(predicate).inverse
+                        if inverse and inverse not in unique_predicates:
+                            unique_predicates[inverse] = unique_predicates[predicate]
+                    except AttributeError:
+                        continue
 
             edge["Top_n_candidates"] = dict(
                 sorted(unique_predicates.items(), key=lambda item: item[1], reverse=True)

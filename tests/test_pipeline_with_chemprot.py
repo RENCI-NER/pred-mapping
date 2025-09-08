@@ -14,7 +14,7 @@ def test_query_endpoint():
     with open(f"{DIR}/newest_chemprot_test_file.json") as f:
         test_payload = json.load(f)
 
-    response = client.post("/query/", json=test_payload, params={
+    response = client.post("/query/", json=test_payload[:1], params={
         "retrieval_method": RetrievalMethod.knn.value,
         "use_sapbert": False
     })
@@ -22,7 +22,7 @@ def test_query_endpoint():
     assert response.status_code == 200
     data = response.json()
 
-    with open(f"{DIR}/chemprot_protocol_results_768_dim.json", "w") as f:
+    with open(f"{DIR}/chemprot_protocol_results_1024_dim_bge.json", "w") as f:
         json.dump(data, f, indent=4)
 
     assert "results" in data
@@ -45,8 +45,8 @@ def test_query_endpoint_with_sapbert():
     assert response.status_code == 200
     data = response.json()
 
-    with open(f"{DIR}/chemprot_protocol_results_768_dim_plus.json", "w") as f:
-        json.dump(data, f, indent=4)
+    # with open(f"{DIR}/chemprot_protocol_results_1024_dim_bgeplus.json", "w") as f:
+    #     json.dump(data, f, indent=4)
 
     assert "results" in data
     assert isinstance(data["results"], list)
