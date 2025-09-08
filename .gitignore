@@ -3,8 +3,6 @@
 *.venv
 *.idea
 *workspace
-/workspace
-../freshLitCoin/LitCoin/predicates/prepInput.py
 .idea/
 .venv
 .venv/
@@ -12,6 +10,12 @@
 /tests/output.json
 /tests/outputs/
 /src/Chemprot_SapBert/model/model.safetensors
+/src/Biolink_SapBert/model/model.safetensors
 /chemprot_data/all_chemprot_mapped_vectors1024.json
+/biolink_data/all_biolink_mapped_vectors1024.json
+/src/Preprocessing/confirms_descriptions.py
+/src/Preprocessing/collect_short_decr.py
 
 
+*.safetensors
+*/model/old/
