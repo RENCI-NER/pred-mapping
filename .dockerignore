@@ -10,6 +10,7 @@ __pycache__
 .idea
 /tests/output.json
 /tests/sample_output.json
+/data/all_biolink_mapped_vectors1024Dim.json
 .cache
 __pycache__/
 *.pyo

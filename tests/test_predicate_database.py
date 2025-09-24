@@ -30,8 +30,8 @@ def test_search_default_mode(dummy_client):
     db.populate_db(EMBEDDINGS)
     result = asyncio.run(db.search("RE is cool"))
 
-    assert isinstance(result, dict)
-    assert all("mapped_predicate" in val for val in result.values())
+    assert isinstance(result, list)
+    assert all("mapped_predicate" in val for val in result)
 
 
 def test_search_nn_mode(dummy_client):
@@ -39,7 +39,7 @@ def test_search_nn_mode(dummy_client):
     db.populate_db(EMBEDDINGS)
     result = asyncio.run(db.search("search for relationship", num_results=1))
     assert len(result) <= 3
-    assert isinstance(result, dict)
+    assert isinstance(result, list)
 
 
 def test_similarity_score_1(dummy_client):

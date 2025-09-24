@@ -10,5 +10,4 @@
 .venv
 .venv/
 .cache
-/tests/output.json
-/tests/sample_output.json
+/tests/outputs

@@ -2,8 +2,14 @@ version: "3"
 services:
   pred-mapping:
     container_name: pred-mapping
-    image: pred-mapping:v0.1
+    image: pred-mapping:latest
     build:
         context: .
+        dockerfile: Dockerfile
     ports:
       - "6380:6380"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/repo
+    restart: unless-stopped

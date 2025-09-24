@@ -3,6 +3,7 @@ import json
 import yaml
 import requests
 from collections import defaultdict
+from typing import Optional, Dict, Any
 from bmt import Toolkit
 
 
@@ -104,7 +105,7 @@ class TextCollector:
             self.missing_counts[prefix] += 1
             x = " ".join(curie.split(":")[1].split("_"))
 
-            #If the string is an integer, we don't want it, but if it's text, we do
+            # If the string is an integer, we don't want it, but if it's text, we do
             if x.isdigit():
                 return []
 
@@ -121,7 +122,9 @@ class TextCollector:
             if page > 0:
                 url += f"&page={page}"
             # print(url)
-            response = requests.get(url).json()
+            resp = requests.get(url)
+            resp.raise_for_status()
+            response = resp.json()
             responses.append(response)
             print(response["page"])
             page += 1
@@ -148,46 +151,105 @@ class TextCollector:
         for predicate, text_dict in mapping_dict.items():
             for entry in text_dict:
                 if entry == "text":
-                    biolink_mappings[predicate].update([text.replace("\n", " ") for text in text_dict[entry]])
+                    biolink_mappings[predicate].update(
+                        [text.replace("\n", " ") for text in text_dict[entry] if len(text.replace("\n", " ")) > 1])
                 else:
                     for text_list in text_dict[entry].values():
-                        biolink_mappings[predicate].update([text.replace("\n", " ") for text in text_list])
+                        biolink_mappings[predicate].update(
+                            [text.replace("\n", " ") for text in text_list if len(text.replace("\n", " ")) > 1])
 
         biolink_mappings = {key: list(val) for key, val in biolink_mappings.items()}
 
         return biolink_mappings
 
-    def retrieve_qualified_mappings( self, reverse=False ):
+    def retrieve_qualified_mappings( self, reverse: bool = False, q_output_file: Optional[str] = None ) -> Dict[
+        str, Any]:
         """
         Fetches and parses the predicate mapping YAML file from the Biolink Model repository.
+
+        Args:
+            reverse (bool): If True, return reverse mapping format.
+            q_output_file (Optional[str]): If set, write the results to a JSON file.
+
         Returns:
-            dict: A dictionary where keys are predicates and values are lists of their corresponding mappings.
+            dict: Mapping of predicates to qualifiers, or reverse mapping which is qualifier to predicate mappings.
         """
         yaml_url = "https://raw.githubusercontent.com/biolink/biolink-model/master/predicate_mapping.yaml"
-
-        unwanted_matches = ["releasing_agent", "positive_modulator", "partial_agonist", "channel_blocker",
-                            "antisense_inhibitor", "negative_allosteric_modulator", "negative_modulator",
-                            "inverse_agonist", "gating_inhibitor"]
-
+        unwanted_matches = [
+            "releasing_agent", "partial_agonist", "channel_blocker",
+            "antisense_inhibitor", "negative_allosteric_modulator",
+            "inverse_agonist", "gating_inhibitor", "AUGMENTS", "opener", "blocker", "ki", "ic50", "vaccine", "INHIBITS"
+        ]
         response = requests.get(yaml_url)
         response.raise_for_status()
-
         predicate_data = yaml.safe_load(response.text)
-        mapping_dict = defaultdict(list)
+
+        reverse_mappings = defaultdict(dict)
+        entries = {}
+
+        matches_key = {"exact matches", "narrow matches", "close matches"}
 
         for mapping in predicate_data.get("predicate mappings", []):
-            predicate = mapping.get("qualified predicate", mapping.get("predicate"))
+            predicate = mapping.get("predicate", mapping.get("qualified predicate"))
             if not predicate:
                 continue
-            matches = mapping.get("exact matches", [])
-            filtered_matches = [match.split(":")[1] for match in matches if
-                                ":" in match and not match.split(":")[1].isdigit() and "_" in match and match.split(":")[1] not in unwanted_matches]
-            if reverse:
-                mapping_dict.update({f"biolink:{match}": predicate for match in filtered_matches})
+            qualified_predicate = mapping.get("qualified predicate", "")
+            direction_qualifier = mapping.get("object direction qualifier", "")
+            aspect_qualifier = mapping.get("object aspect qualifier", "")
+            mapped_predicate = mapping.get("mapped predicate", "")
+            current_mapping = matches_key.intersection(mapping)
+            if not current_mapping and len(mapped_predicate.split(" ")) > 1:
+                filtered_matches = [mapped_predicate]
+                if qualified_predicate:
+                    if aspect_qualifier and direction_qualifier:
+                        extra_text = f"{qualified_predicate} {direction_qualifier} {aspect_qualifier}".strip()
+                    else:
+                        extra_text = f"{mapped_predicate}".strip()
+                    text_list = [extra_text, mapped_predicate]
+                else:
+                    text_list = [f"{mapped_predicate}".strip()]
+                entries[mapped_predicate] = {"text": text_list}
             else:
-                mapping_dict[predicate].extend([" ".join(match.split("_")) for match in filtered_matches])
+                filtered_matches = []
+                for mapping_type in current_mapping:
+                    entries[mapped_predicate] = {}
+                    _matches = mapping[mapping_type]
+                    mapping_dict = self.collect_mapping_data(_matches)
+                    if mapping_dict:
+                        entries[mapped_predicate][mapping_type] = mapping_dict
+                    elif mapping_type == "exact matches":
+                        for match in _matches:
+                            good_prefix = match.split(":")[0] == "CTD"
+                            match = match.split(":")[1]
+                            if good_prefix and match not in unwanted_matches:
+                                filtered_matches.append(match)
+                                qualifier = match.replace("_", " ")
+                                if qualified_predicate:
+                                    if aspect_qualifier and direction_qualifier:
+                                        extra_text = f"{qualified_predicate} {direction_qualifier} {aspect_qualifier}".strip()
+                                    else:
+                                        extra_text = f"{qualified_predicate} {qualifier}".strip()
+                                    text_list = [extra_text, qualifier]
+                                else:
+                                    text_list = [f"{mapped_predicate}".strip()]
+                                text_list = [t for t in text_list if t]
+                                if entries.get(qualifier, {}):
+                                    entries[qualifier]["text"].extend(text_list)
+                                else:
+                                    entries[qualifier] = {"text": text_list}
+            if reverse:
+                for match in filtered_matches:
+                    reverse_mappings[f"biolink:{match.replace(" ", "_")}"] = {
+                        "predicate": f"biolink:{predicate}",
+                        "qualified_predicate": qualified_predicate,
+                        "object_aspect_qualifier": aspect_qualifier.replace(" ", "_"),
+                        "object_direction_qualifier": direction_qualifier.replace(" ", "_")
+                    }
 
-        return dict(mapping_dict)
+        if q_output_file is not None:
+            with open(q_output_file, "w") as file:
+                json.dump(reverse_mappings, file, indent=2)
+        return entries
 
     def collect_mapping_data( self, predicate_mapping_type ):
         """Helper function to collect mapping data for a given predicate and mapping type."""
@@ -195,23 +257,29 @@ class TextCollector:
         for curie in predicate_mapping_type:
             prefix = curie.split(":")[0]
             if prefix in self.prefix_to_source:
-                mapping_dict[curie] = self.collect_text(curie)
+                collected = self.collect_text(curie)
+                if collected:
+                    mapping_dict[curie] = collected
         return mapping_dict
 
-    def run( self, output_file=None ):
+    def run( self, output_file=None, qualified_mappings_file=None ):
         t = Toolkit()
-        qualified_mappings = self.retrieve_qualified_mappings()
+        remove_domains = {"agent", "publication", "information content entity"}
+        # Also saves the qualified mapping file to the directory
+        qualified_mappings_dict = self.retrieve_qualified_mappings(reverse=True, q_output_file=qualified_mappings_file)
         predicates = t.get_descendants("biolink:related_to", formatted=False)
         entries = {}
         no_inverse = []
         inverses = [t.get_element(p).inverse for p in predicates if t.get_element(p).inverse]
         for p in predicates:
             predicate = t.get_element(p)
-            if not t.has_inverse(p) and not predicate.symmetric and p not in inverses:
-                no_inverse.append(p)
-
             if predicate.deprecated:
                 continue
+            if predicate.domain in remove_domains:
+                continue
+
+            if not t.has_inverse(p) and not predicate.symmetric and p not in inverses:
+                no_inverse.append(p)
 
             text = [p]
             if predicate.description:
@@ -224,14 +292,8 @@ class TextCollector:
                     mapping_dict = self.collect_mapping_data(predicate[mapping_type])
                     if mapping_dict:
                         entries[p][mapping_type] = mapping_dict
-
             # To cater for aspect/direction qualifiers like increases expression which are not the original predicates
-
-            for qualified_predicate in qualified_mappings.get(p, []):
-                entries[qualified_predicate] = {"text": text + [qualified_predicate]}
-                for mapping_type in ["exact_mappings", "narrow_mappings", "close_mappings"]:
-                    if mapping_type in entries[p]:
-                        entries[qualified_predicate][mapping_type] = entries[p][mapping_type]
+            entries.update(qualified_mappings_dict)
 
         if output_file is not None:
             with open(output_file, "w") as file:
@@ -239,11 +301,13 @@ class TextCollector:
 
         bads = [(c, bad) for bad, c in self.bad_counts.items()]
         bads.sort(reverse=True)
+        print(f"bad || count")
         for count, bad in bads:
             print(f"{bad}: {count}")
 
         missing = [(c, miss) for miss, c in self.missing_counts.items()]
         missing.sort(reverse=True)
+        print(f"missing || count")
         for count, miss in missing:
             print(f"{miss}: {count}")
 
@@ -253,7 +317,10 @@ class TextCollector:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--mappings", default="biolink_mappings.json", help="Mappings file")
+    parser.add_argument("-q", "--qualified_mappings", default="qualified_predicate_mappings.json",
+                        help=" Qualified mappings file")
     args = parser.parse_args()
     mappings = args.mappings
+    qualified_mappings = args.qualified_mappings
     tc = TextCollector()
-    tc.run(output_file=mappings)
+    tc.run(output_file=mappings, qualified_mappings_file=qualified_mappings)

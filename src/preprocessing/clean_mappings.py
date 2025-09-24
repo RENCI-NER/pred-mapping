@@ -1,10 +1,10 @@
 import argparse
 import json
+from src.utils import load_from_json
 from bmt import Toolkit
-from collect_predicate_text import TextCollector
 
 
-def clean_mappings( mappings_file, negations_file, no_has=True ):
+def clean_mappings(mappings_file, negations_file, no_has=True):
     with open(mappings_file, "r") as m:
         mappings = json.load(m)
 
@@ -18,7 +18,7 @@ def clean_mappings( mappings_file, negations_file, no_has=True ):
             assert len(regular) == len(negation), f"{key}, Reg: {len(regular)}, Neg: {len(negation)}"
             i = 0
             while regular and i < len(regular):
-                if negation[i] == "NOT ENOUGH INFORMATION" or regular[i] == "" or not regular[i]:
+                if negation[i] == "NOT ENOUGH INFORMATION" or "negation" in negation[i] or negation[i] == "" or not negation[i]:
                     regular.pop(i)
                     negation.pop(i)
                 elif no_has and regular[i] == "has":
@@ -28,7 +28,7 @@ def clean_mappings( mappings_file, negations_file, no_has=True ):
                     i += 1
             mappings[key] = regular
             negations[f"{key} NEG"] = negation
-        elif negation == "NOT ENOUGH INFORMATION":
+        elif negation == "NOT ENOUGH INFORMATION" or "negation" in negation or negation == "":
             mappings[key] = []
             negations[f"{key} NEG"] = []
 
@@ -41,12 +41,9 @@ def clean_mappings( mappings_file, negations_file, no_has=True ):
         nout.write(json.dumps(negations, indent=2))
 
 
-def merge_mappings( mappings_file, negations_file, output_file ):
-    with open(mappings_file) as f:
-        mappings = json.load(f)
-
-    with open(negations_file) as f:
-        negations = json.load(f)
+def merge_mappings(mappings_file, negations_file, output_file):
+    mappings = load_from_json(mappings_file)
+    negations = load_from_json(negations_file)
 
     mappings.update(negations)
 
@@ -54,21 +51,19 @@ def merge_mappings( mappings_file, negations_file, output_file ):
         f.write(json.dumps(mappings, indent=2))
 
 
-def cull_mapped_predicates( mapped_predicate_file ):
+def cull_mapped_predicates(mapped_predicate_file, qualified_mapping_file):
     """ Uses file with embedding vector mapping """
-    with open(mapped_predicate_file, "r") as f:
-        predicates = json.load(f)
-        print(f"Loaded {len(predicates)} predicates.")
+    predicates = mapped_predicate_file if isinstance(mapped_predicate_file, list) else load_from_json(mapped_predicate_file)
+
+    qualified_mappings = qualified_mapping_file if isinstance(qualified_mapping_file, dict) else load_from_json(qualified_mapping_file)
 
     remove_domains = [
         "agent",
         "publication",
         "information content entity"
     ]
-
+    avoid = set()
     t = Toolkit()
-    tc = TextCollector()
-    qualified_mappings = tc.retrieve_qualified_mappings(reverse=True)
     keep_predicates = []
     for entry in predicates:
         raw_predicate = entry["predicate"]
@@ -76,7 +71,7 @@ def cull_mapped_predicates( mapped_predicate_file ):
         element = t.get_element(predicate)
 
         if not element:  # If it's not a real predicate, rather it was inferred from qualified_predicate yaml file
-            predicate = qualified_mappings.get(raw_predicate, qualified_mappings.get(raw_predicate.replace("_NEG", "")))
+            predicate = qualified_mappings.get(raw_predicate, qualified_mappings.get(raw_predicate.replace("_NEG", ""))).get("predicate").replace("biolink:", "")
             if not predicate:
                 print("what happ")
             element = t.get_element(predicate)
@@ -92,15 +87,16 @@ def cull_mapped_predicates( mapped_predicate_file ):
         try:
             while keep and element.is_a is not None:
                 element = t.get_element(element.is_a)
-                if element.name == "related to at concept level":
+                if element.name == "related to at concept level" and element.name!="has_chemical_role":
                     keep = False
+                    avoid.add(predicate)
         except AttributeError as e:
             print(f"e :{e}, \n**entry : {entry}")
 
         if keep:
             keep_predicates.append(entry)
 
-    print(f"Culled to {len(keep_predicates)} predicates.")
+    print(f"Loaded {len(predicates)} Culled to {len(keep_predicates)} predicates.")
 
     return keep_predicates
 
@@ -108,8 +104,8 @@ def cull_mapped_predicates( mapped_predicate_file ):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--mappings", default="biolink_mappings.json", help="Mappings file")
-    parser.add_argument("-n", "--negations", default="llama_negated_biolink_mappings.json", help="Negation mappings file")
-    parser.add_argument("-a", "--all_mappings", default="llama_all_biolink_mappings.json", help="Output mappings file")
+    parser.add_argument("-n", "--negations", default="negated_biolink_mappings.json", help="Negation mappings file")
+    parser.add_argument("-a", "--all_mappings", default="all_biolink_mappings.json", help="Output mappings file")
     args = parser.parse_args()
 
     mappings_file = args.mappings

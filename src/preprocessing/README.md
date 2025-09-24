@@ -1,33 +1,76 @@
-# Healpaca Relationship -> Biolink Predicate Mapping
+# Preprocessing Pipeline: Input Relationship → Ontology Predicate Mapping
 
-## General workflow
+This preprocessing pipeline collects **[Biolink](https://github.com/biolink/biolink-model) schema predicate** for the predicate mapping service.  
+It generates cleaned predicate mappings, negations, and embeddings for eventual similarity-based predicate matching.  
 
-### Biolink Predicate Descriptions
-- Collect predicate text and descriptors of each predicate and any ontology terms that map to them 
- ```bash
-    collect_predicate_text.py [-m mappings_file]
-  ```
- Scrapes related ontologies and saves a JSON file to `mappings_file` with Biolink predicates as keys and the list of text descriptors as values.
-- Generate negations version of each description 
-  ```bash
-    get_negations.py [-m mappings_file -n negations_file]
-  ```
- Takes in the mapping file, sends each descriptor to OpenAI to produce negated versions. Saves the results to `negations_filename`.
-- Merge and clean all mappings 
-    ```bash
-      clean_mappings.py [-m mappings_file -n negations_file -a all_mappings_file]
-    ```
- Takes in mapping file and negations file, removes any LLM "not enough information" responses or empty strings, and merges into `all_mappings_file`. **If you try to merge a newly generated mapping file with the existing negations file in the Drive, this will break.** The `TextCollector` was updated and returns fewer bad descriptors, but the negations weren't regenerated to reduce spending. The old mappings file is in the Drive, so this step can be tested using that, or negations can be regenerated.
-- Embed the cleaned predicates/descriptors and saved for API use. The embedding dimension for the model used is `768`
-    ```bash
-      embed_biolink_mappings.py [-m mappings_file -e embeddings_file --lowercase]
-    ```
- Takes in a mapping file (typically all mappings), sends them to OpenAI for embedding, then saves as `embedding_file`. **Currently this does not have batch submission.**
+---
+
+## General Workflow
+
+### 1. Collect Ontology Predicate Descriptions
+```bash
+collect_predicate_text.py [-m mappings_file -q qualified_mappings] 
+```
+
+### 2. Generate Negations: Using an LLM to produce natural negated versions of each descriptor and saves results to negations_file..
+```bash
+get_negations.py [-m mappings_file -n negations_file] 
+```
+
+### 3. Merge and Clean Mappings: Removes invalid responses or empty strings, merges mapping and negation files then outputs all_mappings_file.
+```bash
+clean_mappings.py [-m mappings_file -n negations_file -a all_mappings_file]
+```
+
+### 4. Embed Predicates for Similarity Search: Generates embeddings for all Biolink predicates with the default embedding dimension: 768.
+```bash
+embed_biolink_mappings.py [-m mappings_file -e embeddings_file --lowercase]
+```
+
+## Environment Setup
+
+Before running the pipeline, configure the environment:
+
+### LLM configuration (used for negation generation and reranking)
+```
+export LLM_API_URL=http://localhost:11434/api/generate
+export CHAT_MODEL=alibayram/medgemma:latest
+export MODEL_TEMPERATURE=0.5
+```
+
+### Embedding configuration (used to embedd the ontology predicates and free-text input relationships)
+```
+export EMBEDDING_URL=http://localhost:11434/api/embeddings
+export EMBEDDING_MODEL=nomic-embed-text
+```
+
+### Use local models
+export USE_LOCAL=true
+
+### Output Structure 
+
+After preprocessing, the directory structure should look like this:
+
+```text
+data/
+├── short_description.json            # Some predicate descriptions
+├── all_biolink_mapped_vectors.json   # Embeddings for predicates
+├── qualified_predicate_mappings.json # Qualifier mappings
+```
+
+### Important Notes
+
+ - Embedding Dimension: Default is 768 (nomic-embed-text)
+ - Batch Size: Embeddings are processed in batches of 25 relationships
+ - Version Compatibility: Ensure mapping and negation files are generated with the same ontology version
+ - Local LLM: Uses Ollama  by default for local processing
+   - [![Download Ollama](https://img.shields.io/badge/Download-Ollama-blue?style=for-the-badge)](https://ollama.com/download)
+ - Cost Optimization: Negations are generated once and reused to reduce LLM API calls
 
 
 
-### Healpaca Relationships Extraction
-[detailed in](../../README.md)
 
-## Pipeline
+
+
+
 
