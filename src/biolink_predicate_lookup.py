@@ -153,7 +153,7 @@ class PredicateClient(HEALpacaAsyncClient):
         return relationship_json
 
     def is_qualified(self, predicate):
-        predicate = f"biolink:{predicate.replace(" ", "_")}"
+        predicate = f"biolink:{predicate.replace(' ', '_')}"
         p = self.qualified_predicates.get(predicate, None)
         if p is None:
             return predicate, "", ""
