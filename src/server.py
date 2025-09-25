@@ -8,8 +8,8 @@ from pydantic import BaseModel, Extra, Field
 from typing import List, Dict, Optional
 from src import biolink_predicate_lookup as blp
 from src.utils import load_from_json
-from src.config import get_current_config, list_ontologies, get_ontology_details
-from src.Preprocessing.clean_mappings import cull_mapped_predicates
+from src.config import get_current_config, get_ontology_details
+# from src.Preprocessing.clean_mappings import cull_mapped_predicates
 
 logging.basicConfig(
     level=logging.INFO,
@@ -171,7 +171,7 @@ async def run_query(triple_input: list, is_knn=False):
 
         logger.info("Loading and populating database")
         qualified_predicate = load_from_json(config.qualified_predicate_file)
-        db.populate_db(cull_mapped_predicates(config.embedding_file, qualified_predicate))
+        db.load_db_from_json(config.embedding_file)
 
         data = blp.parse_new_llm_response(triple_input)
         logger.info(f"Vector searching for {len(triple_input)} relationships")
