@@ -1,8 +1,8 @@
 import os
 import time
 import json
+import numpy as np
 import pytest
-import torch
 import asyncio
 from src.predicate_database import PredicateDatabase, transform_embedding
 
@@ -13,7 +13,7 @@ def is_ci_env():
 
 class DummyClient:
     async def get_embedding(self, _):
-        return torch.tensor([0.5] * 768, dtype=torch.float32)
+        return np.array([0.5] * 768, dtype=np.float32)
 
 
 def get_embedding_client():
