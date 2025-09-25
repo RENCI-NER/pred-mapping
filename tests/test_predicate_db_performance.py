@@ -1,8 +1,8 @@
 import os
 import time
 import json
+import numpy as np
 import pytest
-import torch
 import asyncio
 from src.predicate_database import PredicateDatabase, transform_embedding
 
@@ -13,7 +13,7 @@ def is_ci_env():
 
 class DummyClient:
     async def get_embedding(self, _):
-        return torch.tensor([0.5] * 768, dtype=torch.float32)
+        return np.array([0.5] * 768, dtype=np.float32)
 
 
 def get_embedding_client():
@@ -63,16 +63,10 @@ def test_main():
     print(f"Cosine: {t:.6f} sec")
 
     print("...Benchmarking NearestNeighbors method...")
-    db = PredicateDatabase(client, is_nn=True)
+    db = PredicateDatabase(client, is_knn=True)
     db.populate_db(EMBEDDINGS)
     t, _ = benchmark_search(db, embedding=embedding)
     print(f"NearestNeighbors: {t:.6f} sec")
-
-    print("...Benchmarking vector DB method...")
-    db = PredicateDatabase(client, is_vdb=True)
-    db.populate_db(EMBEDDINGS)
-    t, _ = benchmark_search(db, embedding=embedding)
-    print(f"VectorDB: {t:.6f} sec")
 
 
 @pytest.mark.skipif(is_ci_env(), reason="only runs locally")
@@ -82,11 +76,10 @@ def test_main2():
     with open(sample_input_path, "r") as f:
         data = json.load(f)
 
-    queries = [d["relationship"] for d in data[:20]]
+    queries = [d["relationship"] for d in data[:5]]
     print(f"\nTotal Queries: {len(queries)}")
 
     data_file_path = os.path.join(current_dir, "..", "data", "all_biolink_mapped_vectors.json")
     # Run benchmarks
     benchmark_with_real_data(data_file_path, queries, mode_name="Similarities")
-    benchmark_with_real_data(data_file_path, queries, mode_name="NN", is_nn=True)
-    benchmark_with_real_data(data_file_path, queries, mode_name="VDB", is_vdb=True)
+    benchmark_with_real_data(data_file_path, queries, mode_name="NN", is_knn=True)

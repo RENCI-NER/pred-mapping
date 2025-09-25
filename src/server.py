@@ -1,6 +1,4 @@
-import json
 from enum import Enum
-from pathlib import Path
 import logging
 import traceback
 from fastapi import FastAPI, HTTPException, Query
@@ -9,8 +7,18 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Extra, Field
 from typing import List, Dict, Optional
 from src import biolink_predicate_lookup as blp
+from src.utils import load_from_json
+from src.config import get_current_config, get_ontology_details
+# from src.Preprocessing.clean_mappings import cull_mapped_predicates
 
-APP = FastAPI()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(name)s | %(message)s"
+)
+logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.ERROR)
+
+APP = FastAPI(title="Biolink Predicate Mapper")
 
 
 @APP.get("/", include_in_schema=False)
@@ -44,9 +52,8 @@ class HEALpacaInput(BaseModel):
 
 
 class RetrievalMethod(str, Enum):
-    nn = "nearest_neighbor"
-    sim = "cosine_similarities"
-    vectordb = "vectordb"
+    knn = "sklearn_knn"
+    scipy = "scipy_cosine"
 
 
 class Candidate(BaseModel):
@@ -75,14 +82,21 @@ class QueryResponse(BaseModel):
     results: List[PredicateResult]
 
 
-BASE_DIR = Path(__file__)
-BASE_DIR = Path(__file__).resolve().parent
-DESCRIPTION_FILE = BASE_DIR.parent / "data" / "short_description.json"
-EMBEDDING_FILE = BASE_DIR.parent / "data" / "all_biolink_mapped_vectors.json"
-QUALIFIED_PREDICATE_FILE = BASE_DIR.parent / "data" / "qualified_predicate_mapping.json"
+class ErrorResponse(BaseModel):
+    error: str
+    details: Optional[str] = None
+    partial_results: Optional[List[PredicateResult]] = None
 
 
-# "RENCI Relationship Extraction Pipeline"
+@APP.get("/biolink",
+         summary="Biolink Schema Details",
+         tags=["Configuration"])
+async def get_ontologies():
+    """ontologies details"""
+    return {
+        "details": get_ontology_details()
+    }
+
 
 @APP.post("/query/",
           summary="Get a standard predicate for a subject-object pair",
@@ -93,44 +107,93 @@ QUALIFIED_PREDICATE_FILE = BASE_DIR.parent / "data" / "qualified_predicate_mappi
 async def query_predicate(
         triples: List[HEALpacaInput],
         retrieval_method: RetrievalMethod = Query(
-            default=RetrievalMethod.vectordb,
-            include_in_schema=False
+            default=RetrievalMethod.knn
         )
 ):
     try:
+        logger.info(f"Processing {len(triples)} triples with method {retrieval_method.value}")
         input_data = [triple.model_dump() for triple in triples]
-        if retrieval_method.value == "vectordb":
-            results = await run_query(input_data, QUALIFIED_PREDICATE_FILE, DESCRIPTION_FILE, EMBEDDING_FILE,
-                                      is_vdb=True, is_nn=False)
-        elif retrieval_method.value == "nearest_neighbor":
-            results = await run_query(input_data, QUALIFIED_PREDICATE_FILE, DESCRIPTION_FILE, EMBEDDING_FILE,
-                                      is_vdb=False, is_nn=True)
+        if retrieval_method.value == "sklearn_knn":
+            results = await run_query(input_data, is_knn=True)
         else:
-            results = await run_query(input_data, QUALIFIED_PREDICATE_FILE, DESCRIPTION_FILE, EMBEDDING_FILE)
+            results = await run_query(input_data)
+
+        logger.info(f"Successfully processed {len(results)} results")
         return {"results": results}
+    except FileNotFoundError as e:
+        logger.error(f"Configuration file not found: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Service configuration error: required data files not found"
+        )
+    except TimeoutError as e:
+        logger.error(f"Request timeout: {e}")
+        raise HTTPException(
+            status_code=504,
+            detail="Request timeout: external service took too long to respond"
+        )
+    except ConnectionError as e:
+        logger.error(f"External service connection failed: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail="External service temporarily unavailable"
+        )
+    except ValueError as e:
+        logger.error(f"Invalid input data: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid input: {str(e)}"
+        )
+    except RuntimeError as e:
+        logger.error(f"Runtime error: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail="External service error occurred"
+        )
     except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Unexpected error in query_predicate: {type(e).__name__}: {str(e)}")
+        logger.debug(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error occurred while processing request"
+        )
 
 
-async def run_query(triple_input: list, qualifiedPredicate_file: str, description_file: str, embedding_file: str,
-                     is_vdb=False, is_nn=False):
-    llm = blp.PredicateClient()
-    with open(embedding_file, "r") as f:
-        predicate_embedding = json.load(f)
-    logging.info(f"Initializing the DB with {len(predicate_embedding)} predicate embeddings.... ")
-    db = blp.PredicateDatabase(client=llm, is_vdb=is_vdb, is_nn=is_nn)
-    db.populate_db(predicate_embedding)
+async def run_query(triple_input: list, is_knn=False):
+    """
+        Executes predicate mapping query
+    """
+    try:
+        config = get_current_config()
 
-    data = blp.parse_new_llm_response(triple_input)
-    logging.info(f"Vector Searching {len(triple_input)} Data.... ")
-    relationships = await blp.lookup_unique_predicates(data, db)
+        predicate_client = blp.PredicateClient()
+        db = blp.PredicateDatabase(client=predicate_client, is_knn=is_knn)
 
-    logging.info(f"Reranking and Selecting top predicate choice .... ")
-    with open(description_file, "r") as f:
-        predicate_descriptions = json.load(f)
-    with open(qualifiedPredicate_file, "r") as f:
-        qualified_predicate = json.load(f)
-    relationships = blp.relationship_queries_to_batch(relationships, predicate_descriptions, db.is_vdb, db.is_nn)
-    output_triples = await llm.check_relationship(relationships, qualified_predicate, db.is_vdb, db.is_nn)
-    return output_triples
+        logger.info("Loading and populating database")
+        qualified_predicate = load_from_json(config.qualified_predicate_file)
+        db.load_db_from_json(config.embedding_file)
+
+        data = blp.parse_new_llm_response(triple_input)
+        logger.info(f"Vector searching for {len(triple_input)} relationships")
+        relationships = await blp.lookup_unique_predicates(data, db)
+
+        logger.info("Loading predicate descriptions and reranking candidates")
+        predicate_descriptions = load_from_json(config.description_file)
+        relationships = blp.relationship_queries_to_batch(relationships, predicate_descriptions, db.is_knn)
+
+        logger.info("Performing LLM reranking of predicate choices")
+        output_triples = await predicate_client.rerank_relationship_choices(relationships, qualified_predicate, db.is_knn)
+        successful = sum(1 for r in output_triples if r.get('top_choice', {}).get('predicate') != ' ')
+        failed = len(output_triples) - successful
+        if failed > 0:
+            logger.warning(
+                f"Processing completed with {failed} failed predictions out of {len(output_triples)} total")
+        return output_triples
+
+    except FileNotFoundError as e:
+        logger.error(f"Required file not found: {e}")
+        raise FileNotFoundError(f"Configuration file missing: {e}")
+
+    except Exception as e:
+        logger.error(f"Error in run_query: {type(e).__name__}: {str(e)}")
+        raise RuntimeError(f"Query processing failed: {str(e)}")

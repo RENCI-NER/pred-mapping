@@ -1,37 +1,26 @@
 # leverage the renci python base image
-FROM ghcr.io/translatorsri/renci-python-image:3.12.4
+#FROM ghcr.io/translatorsri/renci-python-image:3.12.4
+FROM python:3.12-slim
 
-#Build from this branch.  Assume master for this repo
-ARG BRANCH_NAME=main
-
-# update the container
-RUN apt-get update
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DEFAULT_TIMEOUT=100 \
+    PIP_RETRIES=5
 
 # Create and set working directory
-RUN mkdir /repo
 WORKDIR /repo
 
+COPY requirements.txt .
+
 # get the latest code
-RUN git clone --branch $BRANCH_NAME --single-branch https://github.com/RENCI-NER/pred-mapping.git
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    pip install --upgrade pip setuptools && \
+    pip install -r requirements.txt && \
+    rm -rf /var/lib/apt/lists/* ~/.cache
 
-# Set working directory to the cloned repo
-WORKDIR /repo/pred-mapping
+COPY . .
 
-## Copy project files into the container
-#COPY ./ /repo
-
-# Ensure permissions
-RUN chmod 777 -R .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install uvicorn
-
-# Switch to non-root user
-USER nru
-
-# Expose FastAPI port
 EXPOSE 6380
 
-# Start the app
 ENTRYPOINT ["bash", "main.sh"]

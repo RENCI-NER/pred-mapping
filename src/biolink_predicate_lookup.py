@@ -1,20 +1,22 @@
-import re
 import json
-import ast
-import asyncio
-import requests
-import yaml
-from collections import defaultdict
-from typing import Union
-from src.llm_client import HEALpacaAsyncClient
 import logging
-logger = logging.getLogger(__name__)
-logging.getLogger("linkml_runtime").setLevel(logging.WARNING)
-logging.getLogger("docarray").setLevel(logging.ERROR)
+from tqdm import tqdm
+from typing import Union
+from pydantic import BaseModel
+from src.llm_client import HEALpacaAsyncClient
 from bmt import Toolkit
+from src.utils import chunked, safe_limited_chat_completion, safe_limited_embedding
 from src.predicate_database import PredicateDatabase
 
+logger = logging.getLogger(__name__)
+
 t = Toolkit()
+
+
+class PredicateMapping(BaseModel):
+    mapped_predicate: str
+    negated: str = "False"
+
 
 def get_prompt(subject, object, relationship, abstract, predicate_choices, **kwargs):
     relationship_system_prompt = f"""
@@ -30,9 +32,9 @@ def get_prompt(subject, object, relationship, abstract, predicate_choices, **kwa
         Your Task:
             1. Select the most appropriate key from predicate_choices to replace the given relationship.
             2. Ensure the replacement preserves both **meaning** and **directionality** of the subject-object pair.
-            3. Understand that relationships may be **negated** (e.g., "does not cause", "fails to inhibit").
+            3. Understand that relationships may be **negated**:
                 - If a predicate in `predicate_choices` directly matches the **negated meaning**, use that.
-                - If a predicate matches the base meaning but you must negate it to capture the intended meaning, select that predicate and set `"negated": "True"` in the response.
+                - If a predicate matches the base meaning but you must negate it to capture the intended meaning, select that predicate and set `"negated": "True"` in the response e.g. "does not cause" where causes is in the choices implies that mapped_predicate is causes and negated is True.
                 - Otherwise, use `"negated": "False"`.
 
         Output:
@@ -44,79 +46,117 @@ def get_prompt(subject, object, relationship, abstract, predicate_choices, **kwa
     return relationship_system_prompt
 
 
-# def get_prompt(subject, object, relationship, abstract, predicate_choices, **kwargs):
-#     relationship_system_prompt = f"""
-#         given this input:
-#             subject = {subject} ,
-#             object = {object} ,
-#             relationship = {relationship} ,
-#             abstract = {abstract} ,
-#             predicate_choices = {predicate_choices}
-#
-#         For each key in predicate_choices, the corresponding value is the description of the key
-#
-#         Your Task:
-#             Select the most appropriate key from predicate_choices to replace the relationship based on the abstract while maintaining meaning and directionality of the subject and object.
-#
-#         Output: Response strictly ending with a JSON object in this format:
-#         {{"mapped_predicate": "Top one predicate choice"}}
-#
-#         If any of the predicate_choices key is not a good replacement for the relationship, respond with:
-#         {{"mapped_predicate": "none"}}
-#     """
-#     return relationship_system_prompt
+def extract_mapped_predicate(response_text):
+    """Extract JSON using simple Pydantic parsing"""
+
+    if not response_text or isinstance(response_text, Exception):
+        logger.warning(f"No response or exception: {response_text}")
+        return None
+
+    try:
+        # Find JSON in the response
+        start = response_text.find('{')
+        end = response_text.rfind('}') + 1
+
+        if start == -1 or end == 0:
+            logger.warning("No JSON found in response")
+            return None
+
+        json_str = response_text[start:end]
+        data = json.loads(json_str)
+
+        parsed = PredicateMapping(**data)
+
+        return {
+            "mapped_predicate": parsed.mapped_predicate,
+            "negated": parsed.negated
+        }
+
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Failed to parse JSON: {e}")
+        return None
+    except Exception as e:
+        logger.warning(f"Unexpected error: {e}")
+        return None
 
 
 class PredicateClient(HEALpacaAsyncClient):
-    def __init__( self, **kwargs ):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.qualified_predicates = None
 
-    async def check_relationship(self, relationships_json: list[dict], qualified_predicates: dict, is_vdb = False, is_nn= False) -> list:
-        """ Send options for a single relationship to LLM """
+    async def rerank_relationship_choices(self, relationships_json: list[dict], qualified_predicates: dict, is_nn: bool = False, chunk_size: int = 10) -> list[dict]:
         self.qualified_predicates = qualified_predicates
-        tasks = []
-        for relationship_json in relationships_json:
-            prompt = get_prompt(**relationship_json)
-            task = asyncio.create_task(self._process_single_relationship(relationship_json, prompt, is_vdb, is_nn))
-            tasks.append(task)
-        return await asyncio.gather(*tasks)
+        prompts = [get_prompt(**r) for r in relationships_json]
+        llm_responses = []
+        chunked_relationship = chunked(prompts, chunk_size)
 
-    async def _process_single_relationship(self, relationship_json, prompt, is_vdb, is_nn):
-        ai_response = await self.get_chat_completion(prompt)
-        return self._format_relationship_result(relationship_json, ai_response, is_vdb, is_nn)
+        for batch_prompts in tqdm(chunked_relationship, desc="LLM (Predicate Candidate) Reranking",
+                                  total=(len(prompts) + chunk_size - 1) // chunk_size):
+            responses = await safe_limited_chat_completion(self, batch_prompts)
+            llm_responses.extend(responses)
 
-    def _format_relationship_result( self, relationship_json, ai_response, is_vdb, is_nn ):
-        choices = list(relationship_json.get("predicate_choices").keys())
-        top_choice = extract_mapped_predicate(ai_response, relationship_json.get("predicate_choices"))
-        logger.info(f"""
-        [LLM]: {self.chat_model}
-        [Input]: {relationship_json.get('relationship')}
-        [LLM Raw Response]: {ai_response}
-        [Parsed Predicate]: {top_choice}
-        """)
-        if not top_choice:
+        response_relationship_pairs = list(zip(relationships_json, llm_responses))
+        results = []
+
+        for i in tqdm(range(0, len(response_relationship_pairs), chunk_size), desc="LLM Reranking (Postprocessing)"):
+            batch = response_relationship_pairs[i:i + chunk_size]
+            batch_results = [
+                self._format_relationship_result(r_json, response, is_nn)
+                for r_json, response in batch
+            ]
+            for result in batch_results:
+                if isinstance(result, dict):
+                    results.append(result)
+                else:
+                    logger.error(f"Failed task in batch {i // chunk_size}: {result}")
+
+        return results
+
+    def _format_relationship_result(self, relationship_json, llm_response, is_nn):
+        predicate_choices = relationship_json.get("predicate_choices", {})
+        choices = list(predicate_choices.keys())
+
+        if not choices:
+            logger.warning(f"No predicate candidates found for relationship: {relationship_json.get('relationship')}")
+            relationship_json["top_choice"] = {
+                "predicate": " ",
+                "object_aspect_qualifier": " ",
+                "object_direction_qualifier": " ",
+                "negated": "False",
+                "selector": " "
+            }
+            return relationship_json
+
+        parsed_response = extract_mapped_predicate(llm_response)
+
+        if parsed_response is None or parsed_response.get("mapped_predicate") == "none":
             logger.warning(
-                f"No valid mapping for relationship: {relationship_json.get('relationship')}. Falling back to: {choices[0]}")
-        negated = top_choice.get("negated", False)
-        top_choice = top_choice.get("mapped_predicate", None)
-        predicate = top_choice or f'biolink:{choices[0].replace(" ", "_")}'
+                f"No valid mapping found for relationship: {relationship_json.get('relationship')}. Using first choice: {choices[0]}")
+            predicate = choices[0].strip()
+            negated = "False"
+            selector = "nearest_neighbors" if is_nn else "scipy"
+        else:
+            predicate = parsed_response.get("mapped_predicate")
+            negated = parsed_response.get("negated", "False")
+            selector = self.chat_model
+
         predicate, oaq, odq = self.is_qualified(predicate)
         relationship_json["top_choice"] = {
             "predicate": predicate,
             "object_aspect_qualifier": oaq,
             "object_direction_qualifier": odq,
             "negated": negated,
-            "selector":  self.chat_model if top_choice else "vectorDB" if is_vdb else "nearest_neighbors" if is_nn else "similarities"
+            "selector": selector
         }
         relationship_json.pop("predicate_choices", None)
         return relationship_json
 
     def is_qualified(self, predicate):
+        predicate = f"biolink:{predicate.replace(' ', '_')}"
         p = self.qualified_predicates.get(predicate, None)
         if p is None:
             return predicate, "", ""
-
         return p.get("predicate", ""), p.get("object_aspect_qualifier", ""), p.get("object_direction_qualifier", "")
 
 
@@ -137,36 +177,44 @@ def parse_new_llm_response(llm_response: Union[str, list[dict]]) -> list[dict]:
     return parsed
 
 
-def relationship_queries_to_batch(query_results: list[dict], descriptions, is_vdb, is_nn) -> list[dict]:
-    batch_data = []
-    batch_keys = [
-        "Top_n_candidates",
-        "subject",
-        "object",
-        "relationship",
-        "abstract",
+def relationship_queries_to_batch(query_results: list[dict], descriptions, is_nn) -> list[dict]:
+    method = "nearest_neighbors" if is_nn else "similarities"
+    return [
+        {
+            **edge,
+            "Top_n_retrieval_method": method,
+            "predicate_choices": {k: descriptions.get(k, k) for k in edge.get("Top_n_candidates", {})},
+            "Top_n_candidates": {
+                i: {"mapped_predicate": k, "score": v}
+                for i, (k, v) in enumerate(edge.get("Top_n_candidates", {}).items())
+            },
+        }
+        for edge in query_results
     ]
-    method = "vectorDb" if is_vdb else ("nearest_neighbors" if is_nn else "similarities")
-    for edge in query_results:
-        batch_edge = {key: val for key, val in edge.items() if key in batch_keys}
-        batch_edge["Top_n_retrieval_method"] = method
-        predicate_choices = batch_edge.get("Top_n_candidates", {}).keys()
-        predicate_choices = {k: descriptions.get(k, k) for k in predicate_choices}
-        batch_edge["predicate_choices"] = predicate_choices
-        batch_edge["Top_n_candidates"] = {i : {"mapped_predicate": k,  "score": v} for i, (k, v) in enumerate(batch_edge.get("Top_n_candidates", {}).items())}
-        batch_data.append(batch_edge)
-    return batch_data
 
 
-async def lookup_unique_predicates(parsed_data: list[dict], db: PredicateDatabase, output_file: str = None,
-                              num_results: int = 10) -> list[dict]:
-    print("Looking up mapped predicates for all relationships")
+async def lookup_unique_predicates(
+        parsed_data: list[dict],
+        db: PredicateDatabase,
+        output_file: str = None,
+        num_results: int = 10,
+        batch_size: int = 25,
+) -> list[dict]:
+    input_relationships = list(set(e["relationship"] for e in parsed_data))
 
-    tasks = [process_single_edge(edge, db, num_results) for edge in parsed_data]
-    updated_data = await asyncio.gather(*tasks)
+    chunked_relationship = chunked(input_relationships, batch_size)
+    relationship_embeddings = []
+    for batch in tqdm(chunked_relationship, desc="Embedding Relationship Batches"):
+        result = await safe_limited_embedding(db.client, batch)
+        relationship_embeddings.extend(result)
 
-    need_embeddings = sum(["relationship_embedding" in list(edge.keys()) for edge in parsed_data])
-    print(f"Embeddings found: {need_embeddings}. Sending {len(parsed_data) - need_embeddings} relationships to model.")
+    search_results = await db.batch_search(
+        embeddings=relationship_embeddings,
+        num_results=num_results
+    )
+    search_results_dict = dict(zip(input_relationships, search_results))
+
+    updated_data = format_result(parsed_data, search_results_dict)
 
     if output_file is not None:
         with open(output_file, "w") as out_file:
@@ -175,251 +223,33 @@ async def lookup_unique_predicates(parsed_data: list[dict], db: PredicateDatabas
     return updated_data
 
 
-async def process_single_edge( edge, db, num_results ):
-    try:
-        if "relationship_embedding" not in edge:
-            edge["relationship_embedding"] = await db.client.get_embedding(edge["relationship"])
-
-        search_results = await db.search(
-            text=edge["relationship"],
-            embedding=edge["relationship_embedding"],
-            num_results=num_results
-        )
-
-        if search_results:
-            unique_predicates = {
-                search_results[key]["mapped_predicate"].replace("biolink:", "").replace("_NEG", ""):
-                    round(search_results[key]["score"], 5)
-                for key in search_results
-            }
-
-            for predicate in unique_predicates.copy():
-                try:
-                    if t.get_element(predicate).inverse is not None:
-                        unique_predicates[t.get_element(predicate).inverse] = unique_predicates[predicate]
-                except AttributeError:
-                    pass
-
-            edge["Top_n_candidates"] = {
-                predicate.replace("_", " "): score
-                for predicate, score in sorted(unique_predicates.items(), key=lambda item: item[1], reverse=True)
-            }
-
-    except KeyError as e:
-        print(f"KeyError: {e}\n{json.dumps(edge, indent=2)}")
-
-    return edge
-
-
-def extract_mapped_predicate(response_text, choices):
-    def find_key_from_value(val, choices):
+def format_result(edges: list[dict], search_results: dict) -> list[dict]:
+    for edge in edges:
+        rel = edge.get("relationship")
         try:
-            val = val.strip().lower()
-            for key, value in choices.items():
-                if isinstance(value, str) and (val == value.strip().lower() or val in value.strip().lower()):
-                    return f'biolink:{key.replace(" ", "_")}'
-        except Exception as e:
-            print(f"Exception: {e} for {val}")
-        return None
+            unique_predicates = {}
 
-    def _format_if_valid(mapped, normalized_choices, original_choices, allow_raw=False):
-        if not isinstance(mapped, str):
-            return None
+            rel_search_results = search_results.get(rel, [])
 
-        mapped_lower = mapped.lower()
-        if mapped_lower in normalized_choices:
-            canonical_key = normalized_choices[mapped_lower]
-            return f'biolink:{canonical_key.replace(" ", "_")}'
+            for result in rel_search_results:
+                pred = result["mapped_predicate"].replace("biolink:", "").replace("_NEG", "").replace("_", " ")
+                score = round(result["score"], 5)
+                if pred not in unique_predicates or score > unique_predicates[pred]:
+                    unique_predicates[pred] = score
 
-        reverse = find_key_from_value(mapped, original_choices)
-        if reverse:
-            return reverse
-
-        if allow_raw:
-            return mapped
-
-        return None
-
-    if response_text is None:
-        return None
-
-    choices_keys = choices.keys()
-    cleaned_text = re.sub(r'```(?:json)?\n?', '', response_text.strip()).strip("` \n")
-    normalized_choices = {k.lower(): k for k in choices_keys}
-
-    json_patterns = [
-        r'\{[^{}]*["\']mapped_predicate["\']\s*:\s*[^{}]*?["\']\s*,\s*["\']negated["\']\s*:\s*[^{}]*?\}',  # includes negated
-    ]
-
-    for pattern in json_patterns:
-        match = re.search(pattern, cleaned_text, re.DOTALL | re.IGNORECASE)
-        if match:
-            json_candidate = match.group().strip()
-            if 'null' in json_candidate.lower():
-                return {"mapped_predicate": None, "negated": "False"}
-
-            try:
-                json_candidate = json_candidate.replace("‘", "'").replace("’", "'").replace('“', '"').replace('”', '"')
-                parsed = json.loads(json_candidate)
-            except json.JSONDecodeError:
+            for predicate in list(unique_predicates):
                 try:
-                    parsed = ast.literal_eval(json_candidate)
-                except Exception as e:
-                    print(f"Fallback literal_eval failed: {e}")
+                    inverse = t.get_element(predicate).inverse
+                    if inverse and inverse not in unique_predicates:
+                        unique_predicates[inverse] = unique_predicates[predicate]
+                except AttributeError:
                     continue
 
-            mapped = parsed.get("mapped_predicate")
-            negated = parsed.get("negated", "False")
-            if not mapped:
-                return {"mapped_predicate": None, "negated": "False"}
+            edge["Top_n_candidates"] = dict(
+                sorted(unique_predicates.items(), key=lambda item: item[1], reverse=True)
+            )
 
-            formatted = _format_if_valid(mapped, normalized_choices, choices)
-            return {"mapped_predicate": formatted or None, "negated": str(negated).capitalize()}
-
-    return {"mapped_predicate": None, "negated": "False"}
-
-# def extract_mapped_predicate(response_text, choices):
-#     def find_key_from_value( val, choices ):
-#         try:
-#             val = val.strip().lower()
-#             for key, value in choices.items():
-#                 if isinstance(value, str) and val == value.strip().lower() or val in value.strip().lower():
-#                     return f'biolink:{key.replace(" ", "_")}'
-#         except Exception as e:
-#             print(f" Exception: {e} for {val}")
-#         return None
-#
-#     def _format_if_valid( mapped, normalized_choices, original_choices, allow_raw=False ):
-#         """Helper to validate and format the mapped predicate."""
-#         if not isinstance(mapped, str):
-#             return None  # "none"
-#
-#         mapped_lower = mapped.lower()
-#         if mapped_lower in normalized_choices:
-#             canonical_key = normalized_choices[mapped_lower]
-#             return f'biolink:{canonical_key.replace(" ", "_")}'
-#
-#         # If it's a value match (reverse-lookup)
-#         reverse = find_key_from_value(mapped, original_choices)
-#         if reverse:
-#             return reverse
-#
-#         if allow_raw:
-#             logger.warning(f"Returning fallback raw mapped predicate: '{mapped}'")
-#             return mapped
-#
-#         logger.warning(f"Mapped predicate '{mapped}' not found in choices.")
-#         return None  # "none"
-#
-#     if response_text is None:
-#         return None
-#
-#     choices_keys = choices.keys()
-#     # Normalize and strip known wrapping artifacts
-#     cleaned_text = re.sub(r'```(?:json)?\n?', '', response_text.strip()).strip("` \n")
-#
-#     # Case-insensitive lookup for choice keys
-#     normalized_choices = {k.lower(): k for k in choices_keys}
-#
-#     # === 1. Extract valid JSON/dict-style format ===
-#     json_patterns = [
-#         r'\{[^{}]*["\']mapped_predicate["\']\s*:\s*[^{}]*?\}',  # JSON/dict format
-#     ]
-#
-#     for pattern in json_patterns:
-#         match = re.search(pattern, cleaned_text, re.DOTALL | re.IGNORECASE)
-#         if match:
-#             json_candidate = match.group().strip()
-#             # {mapped_predicate: null}
-#             if 'null' in json_candidate.lower():
-#                 return None#"none"
-#
-#             try:
-#                 json_candidate = json_candidate.replace("‘", "'").replace("’", "'").replace('“', '"').replace('”', '"')
-#                 parsed = json.loads(json_candidate)
-#             except json.JSONDecodeError:
-#                 try:
-#                     parsed = ast.literal_eval(json_candidate)
-#                 except Exception as e:
-#                     logger.warning(f"Fallback literal_eval failed: {e}")
-#                     continue
-#
-#             mapped = parsed.get("mapped_predicate")
-#             if not mapped:
-#                 return None#"none"
-#
-#             return _format_if_valid(mapped, normalized_choices, choices)
-#
-#     # === 2. Fallback: Loose pattern match e.g., mapped_predicate: "treats" ===
-#     loose_match = re.search(
-#         r'["\']?mapped[_ ]predicate["\']?\s*:\s*["\']([^"\'}\n\r]+)["\']?',
-#         cleaned_text,
-#         re.IGNORECASE
-#     )
-#     if loose_match:
-#         mapped = loose_match.group(1).strip()
-#         return _format_if_valid(mapped, normalized_choices, choices)
-#
-#     # === 3. Final fallback: Try natural-language phrasing ===
-#     nl_matches = re.findall(
-#         r'(?:mapped[_ ]predicate[^a-zA-Z0-9]*)?[`\'"]([a-zA-Z0-9_ \-]+)[`\'"]',
-#         cleaned_text,
-#         flags=re.IGNORECASE
-#     )
-#     for match in reversed(nl_matches):
-#         mapped = match.strip()
-#         result = _format_if_valid(mapped, normalized_choices, choices)
-#         if result:
-#             return result
-#
-#     # === 4. Last-resort: match full text to a choice ===
-#     mapped = cleaned_text.strip()
-#     return _format_if_valid(mapped, normalized_choices, choices, allow_raw=True)
-
-
-
-
-
-def retrieve_qualified_mappings(reverse=False, output_file=None):
-    """
-    Fetches and parses the predicate mapping YAML file from the Biolink Model repository.
-    Returns:
-        dict: A dictionary where keys are predicates and values are lists of their corresponding mappings.
-    """
-
-    yaml_url = "https://raw.githubusercontent.com/biolink/biolink-model/master/predicate_mapping.yaml"
-
-    unwanted_matches = ["releasing_agent", "positive_modulator", "partial_agonist", "channel_blocker",
-                        "antisense_inhibitor", "negative_allosteric_modulator", "negative_modulator",
-                        "inverse_agonist", "gating_inhibitor"]
-
-    response = requests.get(yaml_url)
-    response.raise_for_status()
-
-    predicate_data = yaml.safe_load(response.text)
-    mapping_dict = defaultdict(list)
-
-    for mapping in predicate_data.get("predicate mappings", []):
-        predicate = mapping.get("qualified predicate", mapping.get("predicate"))
-        if not predicate:
-            continue
-        aspect_qualifier = mapping.get("object aspect qualifier", "")
-        direction_qualifier = mapping.get("object direction qualifier", "")
-        matches = mapping.get("exact matches", [])
-        filtered_matches = [match.split(":")[1] for match in matches if
-                            ":" in match and not match.split(":")[1].isdigit() and "_" in match and
-                            match.split(":")[1] not in unwanted_matches]
-        if reverse:
-            for match in filtered_matches:
-                mapping_dict.update({f"biolink:{match}": {
-                    "predicate": f"biolink:{predicate}",
-                    "object_aspect_qualifier": aspect_qualifier.replace(" ", "_"),
-                    "object_direction_qualifier": direction_qualifier.replace(" ", "_")}})
-        else:
-            mapping_dict[predicate].extend([" ".join(match.split("_")) for match in filtered_matches])
-
-    if output_file is not None:
-        with open(output_file, "w") as file:
-            file.write(json.dumps(mapping_dict, indent=2))
-
-    return dict(mapping_dict)
+        except Exception as e:
+            logger.error(f"Search failed for edge '{rel}': {e}")
+            edge["Top_n_candidates"] = {}
+    return edges

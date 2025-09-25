@@ -1,113 +1,84 @@
-import json
 import numpy as np
-import torch
+import logging
+from src.utils import load_from_json
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import cdist
-from vectordb import InMemoryExactNNVectorDB
-from docarray import BaseDoc, DocList
-from docarray.typing import NdArray
-
-
-class PredicateText(BaseDoc):
-    predicate: str = ''
-    text: str = ''
-    embedding: NdArray[768]
+logger = logging.getLogger(__name__)
 
 
 class PredicateDatabase:
-    def __init__(self, client, is_vdb = False, is_nn=False):
+    def __init__(self, client, embedding_dim=None, is_knn=False):
+        self.embedding_dim = embedding_dim
         self.all_pred_emb = None
         self.all_pred_texts = None
         self.all_pred = None
         self.db = None
         self.client = client
-        self.is_vdb = is_vdb
-        self.is_nn = is_nn
+        self.is_knn = is_knn
 
-    def load_db_from_json(self, embeddings_file):
-        # print("Loading json")
-        with open(embeddings_file, "r") as f:
-            embeddings = json.load(f)
-        self.populate_db(embeddings)
+    def load_db_from_json(self, embedding_mappings_file):
+        embedding_mappings = load_from_json(embedding_mappings_file)
+        self.populate_db(embedding_mappings)
 
-    def populate_db(self, embeddings):
-        if self.is_vdb:
-            doc_list = []
-            for entry in embeddings:
-                if len(entry["text"]) != 0:
-                    doc_list.append(
-                        PredicateText(
-                            predicate=entry["predicate"],
-                            text=entry["text"],
-                            embedding=entry["embedding"]
-                        )
-                    )
-            # print("Load vectordb")
-            self.db = InMemoryExactNNVectorDB[PredicateText](workspace='./workspace')
-            self.db.index(inputs=DocList[PredicateText](doc_list))
-        else:
-            self.all_pred_texts = [e.get("text", "") for e in embeddings]
-            self.all_pred = [e.get("predicate", "") for e in embeddings]
-            self.all_pred_emb = [e.get("embedding", []) for e in embeddings]
-            self.all_pred_emb = transform_embedding(self.all_pred_emb)
-        # print("Ready")
+    def populate_db(self, embedding_mappings):
+        logger.info(f"Initialized DB with {len(embedding_mappings)} predicate embeddings.... ")
+        self.all_pred_texts = [e.get("text", "") for e in embedding_mappings]
+        self.all_pred = [e.get("predicate", "") for e in embedding_mappings]
+        self.all_pred_emb = [e.get("embedding", []) for e in embedding_mappings]
+        self.all_pred_emb = transform_embedding(self.all_pred_emb)
+        if self.is_knn:
+            self.nn_model = NearestNeighbors(n_neighbors=10, metric="cosine")
+            self.nn_model.fit(self.all_pred_emb)
 
-    async def search(self, text, embedding=None, num_results=10):
-        if embedding is None:
-            embedding = await self.client.get_embedding(text)
+    async def search(self, text: str = None, embedding=None, num_results: int = 10):
         if embedding is None or (hasattr(embedding, '__len__') and len(embedding) == 0):
-            return None
+            embedding = await self.client.get_embedding(text)
+            if embedding is None:
+                return None
+        results = await self.batch_search([embedding], num_results)
+        return results[0] if results else []
 
-        if self.is_vdb:
-            query = PredicateText(text=text, embedding=embedding)
-            results = self.db.search(inputs=DocList[PredicateText]([query]), limit=num_results)
+    async def batch_search(self, embeddings=None, num_results: int = 10):
+        """Search using pre-computed embeddings."""
+        if not embeddings:
+            raise RuntimeError("To do a vector search input embeddings cannot be empty")
 
-            texts = [match.text for match in results[0].matches]
-            predicates = [match.predicate for match in results[0].matches]
-            scores = [score for score in results[0].scores]
+        embeddings = transform_embedding(embeddings)
 
-            results_dict = {
-                i: {
-                    "text": t,
-                    "mapped_predicate": p,
-                    "score": float(s)
-                } for i, (t, p, s) in enumerate(zip(texts, predicates, scores))
-            }
-            return results_dict
-
-        embedding = transform_embedding(embedding)
-
-        if self.is_nn:
-            model = NearestNeighbors(n_neighbors=num_results, metric="cosine")
-            model.fit(self.all_pred_emb)
-            dist, indices = model.kneighbors([embedding])
-            similarities = 1 - dist
-
-            return {
-                idx: {
-                    "text": self.all_pred_texts[idx],
-                    "mapped_predicate": self.all_pred[idx],
-                    "score": float(sim)
+        if self.is_knn:
+            if self.nn_model is None:
+                raise ValueError("NearestNeighbors model not initialized. Call populate_db() first.")
+            distances, indices = self.nn_model.kneighbors(embeddings, n_neighbors=num_results)
+            similarities = 1 - distances
+            return [
+                [
+                    {
+                        "text": self.all_pred_texts[i],
+                        "mapped_predicate": self.all_pred[i],
+                        "score": round(float(similarities[q_idx][j]), 3)
+                    }
+                    for j, i in enumerate(neighbor_idxs)
+                ]
+                for q_idx, neighbor_idxs in enumerate(indices)
+            ]
+        distance = cdist(embeddings, self.all_pred_emb, "cosine")
+        similarities = 1 - distance
+        top_indices = np.argsort(-similarities, axis=1)[:, :num_results]
+        return [
+            [
+                {
+                    "text": self.all_pred_texts[i],
+                    "mapped_predicate": self.all_pred[i],
+                    "score": round(float(similarities[q_idx][i]), 3)
                 }
-                for idx, sim in zip(indices[0], similarities[0])
-            }
-
-        similarities = 1 - cdist([embedding.cpu().detach().numpy()], self.all_pred_emb, metric="cosine")
-        similarities = similarities.flatten()
-        top_k = min(num_results, len(similarities))
-        top_indices = np.argsort(-similarities)[:top_k]
-        return {
-            idx: {
-                "text": self.all_pred_texts[idx],
-                "mapped_predicate": self.all_pred[idx],
-                "score": float(similarities[idx])
-            }
-            for idx in top_indices
-        }
+                for i in top_k_indices
+            ]
+            for q_idx, top_k_indices in enumerate(top_indices)
+        ]
 
 
 def transform_embedding(embedding):
-    if isinstance(embedding, torch.Tensor):
-        return embedding.clone().detach().float()
-    else:
-        return torch.tensor(embedding, dtype=torch.float32)
+    try:
+        return np.array(embedding, dtype=np.float32)
+    except Exception as e:
+        raise RuntimeError(f"Embedding transformation failed: {e}")

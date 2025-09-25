@@ -1,12 +1,12 @@
 *__pycache__
 *.DS_Store
 *.venv
+.env
 *.idea
 *workspace
 /workspace
-../freshLitCoin/LitCoin/predicates/prepInput.py
 .idea/
 .venv
 .venv/
 .cache
-/tests/output.json
+/tests/outputs
