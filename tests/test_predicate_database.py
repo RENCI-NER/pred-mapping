@@ -1,5 +1,5 @@
 import pytest
-import torch
+import numpy as np
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 from src.predicate_database import PredicateDatabase, transform_embedding
@@ -14,7 +14,7 @@ EMBEDDINGS = [
 @pytest.fixture
 def dummy_client():
     mock = MagicMock()
-    mock.get_embedding = AsyncMock(return_value=torch.tensor([0.2] * 768, dtype=torch.float32))
+    mock.get_embedding = AsyncMock(return_value=np.array([0.2] * 768, dtype=np.float32))
     return mock
 
 
