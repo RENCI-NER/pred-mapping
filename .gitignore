@@ -5,6 +5,7 @@
 *workspace
 .idea/
 .venv
+.env
 .venv/
 .cache
 /tests/output.json
