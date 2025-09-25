@@ -5,7 +5,6 @@
 *.idea
 *workspace
 /workspace
-../freshLitCoin/LitCoin/predicates/prepInput.py
 .idea/
 .venv
 .venv/
