@@ -33,16 +33,29 @@ The system consists of two stages:
 ## Setup and Installation
 
 ### Local Setup
-
-1. Clone this repository
-2. Install dependencies:
+1. From the terminal, create an environment and activate it
+```bash
+    python3.12 -m venv venv
+```
+```bash
+     source venv/bin/activate
+```
+2. Clone this repository
+```bash
+git clone https://github.com/RENCI-NER/pred-mapping.git
+```
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Start the server:
+3. Start the server by running:
    ```bash
    uvicorn src.server:APP --reload
    ```
+   or
+    ```bash
+      sh main.sh 
+    ```
 
 ### Docker Setup (MacBook)
 
@@ -69,7 +82,7 @@ The system consists of two stages:
 
 Set the default ontology:
 ```bash
-export ONTOLOGY=biolink  # or chemprot
+export ONTOLOGY=biolink  # or chemprot (smaii letters)
 ```
 
 ---

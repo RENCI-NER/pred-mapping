@@ -45,9 +45,9 @@ def load_sapbert_data():
     try:
         # Import based on ontology
         if ontology_name == "chemprot":
-            from src.Chemprot_SapBert.utils import sapbert_predict as sp, sapbert_score_batch as ssb, get_labels
+            from Chemprot_SapBert.utils import sapbert_predict as sp, sapbert_score_batch as ssb, get_labels
         elif ontology_name == "biolink":
-            from src.Biolink_SapBert.utils import sapbert_predict as sp, sapbert_score_batch as ssb, get_labels
+            from Biolink_SapBert.utils import sapbert_predict as sp, sapbert_score_batch as ssb, get_labels
         else:
             raise ImportError(f"No SapBERT module for ontology: {ontology_name}")
 
@@ -108,7 +108,7 @@ def get_prompt(subject, object, relationship, abstract, predicate_choices, **kwa
     return relationship_system_prompt
 
 
-def extract_mapped_predicate(response_text):
+def extract_mapped_predicate(response_text, choices):
     """Extract JSON using simple Pydantic parsing"""
 
     if not response_text or isinstance(response_text, Exception):
@@ -129,10 +129,11 @@ def extract_mapped_predicate(response_text):
 
         parsed = PredicateMapping(**data)
 
-        return {
-            "mapped_predicate": parsed.mapped_predicate,
-            "negated": parsed.negated
-        }
+        if parsed.mapped_predicate in choices:
+            return {
+                "mapped_predicate": parsed.mapped_predicate,
+                "negated": parsed.negated
+            }
 
     except (json.JSONDecodeError, ValueError) as e:
         logger.warning(f"Failed to parse JSON: {e}")
@@ -190,7 +191,7 @@ class PredicateClient(HEALpacaAsyncClient):
             }
             return relationship_json
 
-        parsed_response = extract_mapped_predicate(llm_response)
+        parsed_response = extract_mapped_predicate(llm_response, choices)
 
         if parsed_response is None or parsed_response.get("mapped_predicate") == "none":
             logger.warning(

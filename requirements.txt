@@ -3,12 +3,12 @@ python-dotenv>=1.0.0
 bmt==1.4.4
 fastapi==0.115.12
 httpx~=0.28.1
-numpy==2.2.4
+numpy
 pydantic==2.11.3
 PyYAML~=6.0.2
 requests==2.32.3
 scikit-learn~=1.6.1
-scipy==1.15.2
+scipy
 transformers==4.40.0
 torch
 tqdm==4.67.1

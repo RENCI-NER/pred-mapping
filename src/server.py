@@ -121,7 +121,7 @@ async def query_predicate(
         # Switch ontology if specified
         original_ontology = get_current_config().name
         if ontology.value != original_ontology:
-            set_ontology(ontology.value)
+            set_ontology(original_ontology)
 
         config = get_current_config()
         logger.info(f"Processing {len(triples)} triples with {config.name}")

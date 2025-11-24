@@ -8,12 +8,18 @@
 .env
 .venv/
 .cache
+.pytest_cache/
 /tests/output.json
 /tests/outputs/
-/src/Chemprot_SapBert/model/model.safetensors
-/src/Biolink_SapBert/model/model.safetensors
+/tests/output1/
+/tests/output2/
+/tests/outputs1
+
+/Chemprot_SapBert/model/model.safetensors
+/Biolink_SapBert/model/model.safetensors
 /chemprot_data/all_chemprot_mapped_vectors1024.json
 /biolink_data/all_biolink_mapped_vectors1024.json
+
 /src/Preprocessing/confirms_descriptions.py
 /src/Preprocessing/collect_short_decr.py
 
