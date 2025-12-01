@@ -6,7 +6,7 @@ A two-stage pipeline for mapping biomedical relationships (subject, object, cont
 
 The system consists of two stages:
 
-1. **Preprocessing Stage** (run infrequently):
+1. **Preprocessing Stage** (run infrequently - Details [Here](src/Preprocessing/README.md)):
    - Collect predicate text and descriptions
    - Generate negations and clean mappings
    - Embed predicates for similarity search
