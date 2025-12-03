@@ -4,7 +4,13 @@ This pipeline prepares ontology data for the predicate mapping service. It suppo
 
 ## Workflow
 
-1. Collect predicate text and descriptions: This module scrapes biolink ontology and saves JSON files to 
+1. Navigate to the directory:
+    ```bash
+      cd pred-mapping/src/Preprocessing
+   ```
+   Then run the following module one after the other
+
+2. Collect predicate text and descriptions: This module scrapes biolink ontology and saves JSON files to 
    - `mappings_file`: predicates as keys with lists of text descriptors as values,
    - `qualified_predicate_mappings.json` mappings of predicates to qualifiers for qualified predicates
    - `biolink_short_description.json` predicates as keys with short text descriptors as values 
