@@ -1,14 +1,61 @@
 import argparse
 import json
 import yaml
+from pathlib import Path
 import requests
 from collections import defaultdict
 from typing import Optional, Dict, Any
 from bmt import Toolkit
 
 
+def retrieve_short_description(descr_output_file=None) :
+    short_description_url = "https://raw.githubusercontent.com/biolink/biolink-model/master/src/biolink_model/schema/biolink_model.yaml"
+    resp = requests.get(short_description_url)
+    resp.raise_for_status()
+    data = yaml.safe_load(resp.text)
+    slots = data.get("slots", {})
+    slot_names = list(slots.keys())
+
+    start_idx = slot_names.index('related to')
+    end_idx = slot_names.index('association slot')
+
+    predicates = {}
+    for name in slot_names[start_idx:end_idx]:
+        info = slots[name]
+        desc = info.get('description', name)
+        predicates[name] = desc
+
+    if descr_output_file is not None:
+        save_to_biolink_data(predicates, filename=descr_output_file)
+
+
+def save_to_biolink_data(predicates, filename=None):
+    """
+    Save predicates to pred-mapping/biolink_data/
+
+    Args:
+        predicates: Dictionary of {predicate: description}
+        filename: Name of the JSON file to create
+    """
+
+    current_file = Path(__file__).resolve()
+
+    # Go up 3 levels: Preprocessing -> src -> pred-mapping
+    project_root = current_file.parent.parent.parent
+
+    biolink_data_dir = project_root / 'biolink_data'
+    biolink_data_dir.mkdir(exist_ok=True)
+
+    output_path = biolink_data_dir / filename
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(predicates, f, indent=2, ensure_ascii=False)
+
+    print(f"Saved {len(predicates)} predicates to: {output_path}")
+    return output_path
+
 class TextCollector:
-    def __init__( self ):
+    def __init__(self):
         self.skos = {}
         self.ro = {}
         self.uberon = {}
@@ -162,7 +209,7 @@ class TextCollector:
 
         return biolink_mappings
 
-    def retrieve_qualified_mappings( self, reverse: bool = False, q_output_file: Optional[str] = None ) -> Dict[
+    def retrieve_qualified_mappings(self, reverse: bool = False, q_output_file: Optional[str] = None) -> Dict[
         str, Any]:
         """
         Fetches and parses the predicate mapping YAML file from the Biolink Model repository.
@@ -174,13 +221,13 @@ class TextCollector:
         Returns:
             dict: Mapping of predicates to qualifiers, or reverse mapping which is qualifier to predicate mappings.
         """
-        yaml_url = "https://raw.githubusercontent.com/biolink/biolink-model/master/predicate_mapping.yaml"
+        qualified_mapping_url = "https://raw.githubusercontent.com/biolink/biolink-model/master/predicate_mapping.yaml"
         unwanted_matches = [
             "releasing_agent", "partial_agonist", "channel_blocker",
             "antisense_inhibitor", "negative_allosteric_modulator",
             "inverse_agonist", "gating_inhibitor", "AUGMENTS", "opener", "blocker", "ki", "ic50", "vaccine", "INHIBITS"
         ]
-        response = requests.get(yaml_url)
+        response = requests.get(qualified_mapping_url)
         response.raise_for_status()
         predicate_data = yaml.safe_load(response.text)
 
@@ -247,11 +294,10 @@ class TextCollector:
                     }
 
         if q_output_file is not None:
-            with open(q_output_file, "w") as file:
-                json.dump(reverse_mappings, file, indent=2)
+            save_to_biolink_data(reverse_mappings, filename=q_output_file)
         return entries
 
-    def collect_mapping_data( self, predicate_mapping_type ):
+    def collect_mapping_data(self, predicate_mapping_type):
         """Helper function to collect mapping data for a given predicate and mapping type."""
         mapping_dict = {}
         for curie in predicate_mapping_type:
@@ -262,10 +308,11 @@ class TextCollector:
                     mapping_dict[curie] = collected
         return mapping_dict
 
-    def run(self, output_file=None, qualified_mappings_file=None):
+    def run(self, output_file=None, qualified_mappings_file=None, descr_output_file=None):
         t = Toolkit()
         remove_domains = {"agent", "publication", "information content entity"}
-        # Also saves the qualified mapping file to the directory
+        # Also saves the qualified mapping and short description files to the directory
+        retrieve_short_description(descr_output_file)
         qualified_mappings_dict = self.retrieve_qualified_mappings(reverse=True, q_output_file=qualified_mappings_file)
         predicates = t.get_descendants("biolink:related_to", formatted=False)
         entries = {}
@@ -319,8 +366,10 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mappings", default="biolink_mappings.json", help="Mappings file")
     parser.add_argument("-q", "--qualified_mappings", default="qualified_predicate_mappings.json",
                         help=" Qualified mappings file")
+    parser.add_argument("-d", "--short_description", default="biolink_short_description.json", help="Short description file")
     args = parser.parse_args()
     mappings = args.mappings
     qualified_mappings = args.qualified_mappings
+    short_description = args.short_description
     tc = TextCollector()
-    tc.run(output_file=mappings, qualified_mappings_file=qualified_mappings)
+    tc.run(output_file=mappings, qualified_mappings_file=qualified_mappings, descr_output_file=short_description)

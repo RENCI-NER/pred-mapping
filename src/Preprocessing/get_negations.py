@@ -214,8 +214,9 @@ async def process_descriptors(input_json_path, output_json_path):
 
 if __name__ == "__main__":
     # Paths to the input and output JSON files
+    ontology = "biolink"  # or "chemprot"
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--mappings", default="chemprot_mappings.json", help="Mappings file")
+    parser.add_argument("-m", "--mappings", default=f"{ontology}_mappings.json", help="Mappings file")
     parser.add_argument("-n", "--negations", default="negated_chemprot_mappings.json",
                         help="Negation mappings file")
     args = parser.parse_args()

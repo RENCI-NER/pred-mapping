@@ -5,7 +5,7 @@ import time
 from tqdm import tqdm
 from src.utils import chunked, safe_limited_embedding
 from src.llm_client import HEALpacaAsyncClient
-from clean_mappings import cull_mapped_predicates
+from collect_biolink_predicate_text import save_to_biolink_data
 
 class EmbeddingClient(HEALpacaAsyncClient):
     def __init__(self, **kwargs):
@@ -78,9 +78,7 @@ async def embed_biolink_predicates(infile, infile_hierarchy_file, outfile, use_l
                     "embedding": None
                 })
 
-    with open(outfile, "w") as file:
-        json.dump(results, file, indent=2)
-
+    save_to_biolink_data(results, outfile)
     end_time = time.time()
     print(f"Execution Time: {end_time - start_time:.2f} seconds")
     print(f"Total results: {len(results)}")
@@ -90,18 +88,12 @@ async def embed_biolink_predicates(infile, infile_hierarchy_file, outfile, use_l
     else:
         print("Success rate: 100.0%")
 
-    # with open(infile_hierarchy_file, "r") as file:
-    #     infile_hierarchy = json.load(file)
-    #
-    # culledresults = cull_mapped_predicates(results, infile_hierarchy)
-    # with open(f"culled_{outfile}", "w") as file:
-    #     json.dump(culledresults, file, indent=2)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--mappings", default="all_chemprot_mappings.json", help="Input biolink mapping file")
+    parser.add_argument("-m", "--mappings", default="all_biolink_mappings.json", help="Input biolink mapping file")
     parser.add_argument("-q", "--qualified_mappings", default="qualified_predicate_mappings.json", help="Input biolink mapping file")
-    parser.add_argument("-e", "--embeddings", default="all_chemprot_mapped_vectors.json", help="Output biolink embedding file")
+    parser.add_argument("-e", "--embeddings", default="all_biolink_mapped_vectors.json", help="Output biolink embedding file")
     parser.add_argument("--lowercase", action="store_true", default=False, help="Use lowercase mappings")
     args = parser.parse_args()
     mappings_file = args.mappings

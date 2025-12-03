@@ -13,7 +13,6 @@ def fetch_chemprot_data(self, output_file=None):
 
     # Mapping CPR codes to categories
     cpr2label = {
-        "CPR:0": "Other",
         "CPR:1": "Part_of",
         "CPR:2": "Regulator",
         "CPR:3": "Upregulator",

@@ -133,34 +133,3 @@ async def safe_limited_chat_completion(async_client, prompts: list[str], retries
 
     return results
 
-
-# ALTERNATIVE: Even more conservative version for very unstable servers
-async def ultra_safe_chat_completion(async_client, prompts: list[str], delay_between_requests: float = 1.0):
-    """
-    Ultra-conservative approach: process one request at a time with delays
-    Use this if the batch approach still causes server issues
-    """
-    results = []
-
-    for i, prompt in enumerate(prompts):
-        logger.info(f"Processing prompt {i + 1}/{len(prompts)}")
-
-        # Try each prompt with built-in retries from the client
-        try:
-            result = await async_client.get_chat_completion(prompt)
-            results.append(result)
-
-            if result is None:
-                logger.warning(f"Prompt {i + 1} returned None")
-            else:
-                logger.debug(f"Prompt {i + 1} completed successfully")
-
-        except Exception as e:
-            logger.error(f"Prompt {i + 1} failed with exception: {e}")
-            results.append(None)
-
-        # Small delay between requests to be nice to server
-        if i < len(prompts) - 1:  # Don't delay after the last request
-            await asyncio.sleep(delay_between_requests)
-
-    return results
