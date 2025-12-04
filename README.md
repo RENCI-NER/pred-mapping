@@ -62,10 +62,8 @@ For local inference with Ollama:
 ```bash
      source venv/bin/activate
 ```
-3. Download the latest source code from 
-```bash
-https://github.com/RENCI-NER/pred-mapping/releases/tag/v1.0
-```
+3. Download the latest source code as [.zip](https://github.com/RENCI-NER/pred-mapping/archive/refs/tags/v1.0.zip) or [.tar.gz](https://github.com/RENCI-NER/pred-mapping/archive/refs/tags/v1.0.tar.gz)
+
 4. Navigate to `pred-mapping` directory
 ```bash
  cd pred-mapping
